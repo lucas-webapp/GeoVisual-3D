@@ -12,6 +12,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- OrbitControls pour tourner autour de la scène -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Delaunator pour la triangulation des surfaces (toit de rocher, etc.) -->
+    <script src="https://cdn.jsdelivr.net/npm/delaunator@5/delaunator.min.js"></script>
 
     <style>
         body { margin: 0; overflow: hidden; background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
@@ -94,6 +96,7 @@
                 <div class="flex gap-2">
                     <button id="tab-btn-tirants" onclick="switchTab('tirants')" class="px-4 py-1.5 rounded text-sm bg-blue-600 text-white font-semibold transition-colors">Tirants</button>
                     <button id="tab-btn-pieux" onclick="switchTab('pieux')" class="px-4 py-1.5 rounded text-sm text-slate-400 hover:text-white transition-colors">Pieux</button>
+                    <button id="tab-btn-surfaces" onclick="switchTab('surfaces')" class="px-4 py-1.5 rounded text-sm text-slate-400 hover:text-white transition-colors">Surfaces</button>
                 </div>
                 <button onclick="fermerGestionnaire()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
             </div>
@@ -148,8 +151,59 @@
                 </div>
             </div>
 
+            <!-- VUE SURFACES -->
+            <div id="view-surfaces" class="flex-1 flex flex-col overflow-hidden hidden">
+                <div class="p-3 flex flex-wrap gap-3 border-b border-slate-800 bg-slate-800/40 items-center justify-between">
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <button onclick="ajouterSurface()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs shadow transition-colors font-semibold">
+                            + Nouvelle Surface
+                        </button>
+                        <span class="text-slate-400 text-[10px] italic">💡 Astuce : cliquez sur "X point(s)" pour saisir ou coller les coordonnées (X, Y, Z) de la surface.</span>
+                    </div>
+                    <button onclick="purgerSurfaces()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer Surfaces</button>
+                </div>
+                <div class="flex-1 overflow-auto p-2 custom-scrollbar">
+                    <table class="w-full text-left text-sm text-slate-300">
+                        <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
+                            <tr>
+                                <th class="px-2 py-2">Nom</th><th class="px-2 py-2 text-center">Points</th>
+                                <th class="px-2 py-2 text-center">Visible</th><th class="px-2 py-2 text-center">Couleur</th>
+                                <th class="px-2 py-2">Opacité</th><th class="px-2 py-2">Épaisseur (m)</th>
+                                <th class="px-2 py-2 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-surfaces-body" class="divide-y divide-slate-700/50"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="p-4 border-t border-slate-700 bg-slate-800/80 flex justify-end">
                 <button onclick="fermerGestionnaire()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded shadow font-bold transition-colors">Appliquer et Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SECONDAIRE : POINTS D'UNE SURFACE (Z-INDEX TRÈS ÉLEVÉ) -->
+    <div id="modal-points-surface" class="hidden pointer-events-auto fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-500 rounded-lg shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col m-4 p-5">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-lg font-bold text-white">Points de la surface : <span id="modal-points-nom-surface" class="text-cyan-400"></span></h2>
+                <button onclick="fermerEditeurPoints()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">💡 Astuce : cliquez dans une cellule puis collez (Ctrl+V) vos points X, Y, Z depuis Excel.</p>
+            <div class="mb-2">
+                <button onclick="ajouterPointSurface()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs shadow transition-colors font-semibold">+ Nouveau Point</button>
+            </div>
+            <div class="flex-1 overflow-auto custom-scrollbar">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
+                        <tr><th class="px-2 py-2">X</th><th class="px-2 py-2">Y</th><th class="px-2 py-2">Z</th><th class="px-2 py-2 text-center">Actions</th></tr>
+                    </thead>
+                    <tbody id="table-points-surface-body" class="divide-y divide-slate-700/50"></tbody>
+                </table>
+            </div>
+            <div class="flex justify-end mt-4">
+                <button onclick="fermerEditeurPoints()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded shadow font-bold transition-colors">Fermer</button>
             </div>
         </div>
     </div>
@@ -183,13 +237,25 @@
             {"nom": "P4", "x": 296865.000, "y": 228287.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2}
         ];
 
+        let donnees_surfaces = [
+            { nom: "Exemple - Toit du Rocher", visible: true, couleur: 0x8a7968, opacite: 0.85, epaisseur: 0.5, points: [
+                { x: 296860.0, y: 228285.0, z: 150.0 },
+                { x: 296880.0, y: 228285.0, z: 151.5 },
+                { x: 296880.0, y: 228312.0, z: 149.0 },
+                { x: 296860.0, y: 228312.0, z: 148.0 },
+                { x: 296870.0, y: 228298.0, z: 153.0 }
+            ] }
+        ];
+
         let scene, camera, renderer, controls;
         let labelsList = [];
-        let meshes3D = {}; 
+        let meshes3D = {};
+        let meshesSurfaces = {};
 
         let centreX = 0, centreY = 0, centreZ = 0;
         let donneesModifiees = false;
         let callbackModalCustom = null;
+        let indexSurfaceEnEdition = null;
 
         // Ordre des colonnes du tableau, utilisé pour le collage type "tableur"
         const colsTirants = ['groupe', 'nom', 'x', 'y', 'z', 'L', 'theta', 'incl', 'diametre'];
@@ -277,8 +343,9 @@
 
         function preparerDonnees() {
             centreX = 0; centreY = 0; centreZ = 0;
-            let totalItems = donnees_tirants.length + donnees_pieux.length;
-            
+            let totalPointsSurfaces = donnees_surfaces.reduce((n, s) => n + s.points.length, 0);
+            let totalItems = donnees_tirants.length + donnees_pieux.length + totalPointsSurfaces;
+
             if (totalItems === 0) return;
 
             donnees_tirants.forEach(t => {
@@ -287,7 +354,7 @@
                 t.xFin = t.x + t.L * Math.cos(inclRad) * Math.cos(thetaRad);
                 t.yFin = t.y + t.L * Math.cos(inclRad) * Math.sin(thetaRad);
                 t.zFin = t.z - t.L * Math.sin(inclRad);
-                
+
                 if(!t.groupe) t.groupe = t.nom.toUpperCase().startsWith("T") ? "A" : "B";
                 if(!t.diametre) t.diametre = 0.3;
                 t.isNotreOuvrage = (t.groupe === "A");
@@ -295,7 +362,8 @@
 
             donnees_tirants.forEach(t => { centreX += t.x; centreY += t.y; centreZ += t.z; });
             donnees_pieux.forEach(p => { centreX += p.x; centreY += p.y; centreZ += p.zTete; });
-            
+            donnees_surfaces.forEach(s => { s.points.forEach(pt => { centreX += pt.x; centreY += pt.y; centreZ += pt.z; }); });
+
             centreX /= totalItems;
             centreY /= totalItems;
             centreZ /= totalItems;
@@ -419,6 +487,84 @@
             });
         }
 
+        // Renvoie les arêtes qui n'appartiennent qu'à un seul triangle (le contour de la surface)
+        function trouverAretesBordure(triangles) {
+            const compteur = new Map();
+            for (let t = 0; t < triangles.length; t += 3) {
+                const tri = [triangles[t], triangles[t + 1], triangles[t + 2]];
+                for (let k = 0; k < 3; k++) {
+                    const a = tri[k], b = tri[(k + 1) % 3];
+                    const cle = a < b ? `${a}_${b}` : `${b}_${a}`;
+                    if (compteur.has(cle)) compteur.get(cle).nb++;
+                    else compteur.set(cle, { nb: 1, i: a, j: b });
+                }
+            }
+            const bordures = [];
+            compteur.forEach(v => { if (v.nb === 1) bordures.push([v.i, v.j]); });
+            return bordures;
+        }
+
+        // Triangule les points (X, Y) de la surface et construit sa géométrie 3D (avec épaisseur éventuelle)
+        function construireGeometrieSurface(surface) {
+            if (!surface.points || surface.points.length < 3) return null;
+
+            const delaunay = Delaunator.from(surface.points, p => p.x, p => p.y);
+            const triangles = delaunay.triangles;
+
+            const sommetHaut = (idx) => {
+                const p = surface.points[idx];
+                return [p.x - centreX, p.z - centreZ, -(p.y - centreY)];
+            };
+            const sommetBas = (idx) => {
+                const p = surface.points[idx];
+                return [p.x - centreX, (p.z - surface.epaisseur) - centreZ, -(p.y - centreY)];
+            };
+
+            const positions = [];
+            for (let t = 0; t < triangles.length; t += 3) {
+                const [a, b, c] = [triangles[t], triangles[t + 1], triangles[t + 2]];
+                positions.push(...sommetHaut(a), ...sommetHaut(b), ...sommetHaut(c));
+            }
+
+            if (surface.epaisseur > 0) {
+                for (let t = 0; t < triangles.length; t += 3) {
+                    const [a, b, c] = [triangles[t], triangles[t + 1], triangles[t + 2]];
+                    positions.push(...sommetBas(a), ...sommetBas(c), ...sommetBas(b));
+                }
+
+                trouverAretesBordure(triangles).forEach(([i, j]) => {
+                    const ti = sommetHaut(i), tj = sommetHaut(j);
+                    const bi = sommetBas(i), bj = sommetBas(j);
+                    positions.push(...ti, ...tj, ...bj);
+                    positions.push(...ti, ...bj, ...bi);
+                });
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.computeVertexNormals();
+            return geometry;
+        }
+
+        function dessinerSurfaces() {
+            donnees_surfaces.forEach((s, i) => {
+                if (!s.visible) return;
+                const geometry = construireGeometrieSurface(s);
+                if (!geometry) return;
+
+                const material = new THREE.MeshPhongMaterial({
+                    color: s.couleur,
+                    opacity: s.opacite,
+                    transparent: s.opacite < 1,
+                    side: THREE.DoubleSide,
+                    shininess: 15
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                scene.add(mesh);
+                meshesSurfaces[i] = mesh;
+            });
+        }
+
         function creerLabel(texte, position, couleurHex) {
             const div = document.createElement('div');
             div.className = 'anchor-label';
@@ -470,22 +616,20 @@
         }
 
         function switchTab(tab) {
-            document.getElementById('view-tirants').classList.toggle('hidden', tab !== 'tirants');
-            document.getElementById('view-pieux').classList.toggle('hidden', tab !== 'pieux');
-            
-            document.getElementById('tab-btn-tirants').className = tab === 'tirants' 
-                ? 'px-4 py-1.5 rounded text-sm bg-blue-600 text-white font-semibold transition-colors' 
-                : 'px-4 py-1.5 rounded text-sm text-slate-400 hover:text-white transition-colors';
-                
-            document.getElementById('tab-btn-pieux').className = tab === 'pieux' 
-                ? 'px-4 py-1.5 rounded text-sm bg-blue-600 text-white font-semibold transition-colors' 
-                : 'px-4 py-1.5 rounded text-sm text-slate-400 hover:text-white transition-colors';
+            const styleActif = 'px-4 py-1.5 rounded text-sm bg-blue-600 text-white font-semibold transition-colors';
+            const styleInactif = 'px-4 py-1.5 rounded text-sm text-slate-400 hover:text-white transition-colors';
+
+            ['tirants', 'pieux', 'surfaces'].forEach(t => {
+                document.getElementById('view-' + t).classList.toggle('hidden', tab !== t);
+                document.getElementById('tab-btn-' + t).className = tab === t ? styleActif : styleInactif;
+            });
         }
 
         function ouvrirGestionnaire() {
             donneesModifiees = false;
             afficherTableauDonnees();
             afficherTableauPieux();
+            afficherTableauSurfaces();
             document.getElementById('modal-gestionnaire').classList.remove('hidden');
         }
 
@@ -581,6 +725,128 @@
             });
         }
 
+        // --- SURFACES (triangulation Delaunay des points X, Y, Z) ---
+        const hexNombreVersCss = (hex) => '#' + hex.toString(16).padStart(6, '0');
+        const cssVersHexNombre = (css) => parseInt(css.replace('#', ''), 16);
+
+        function afficherTableauSurfaces() {
+            const tbody = document.getElementById('table-surfaces-body');
+            tbody.innerHTML = '';
+            donnees_surfaces.forEach((s, i) => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-800/50">
+                        <td class="p-1"><input type="text" value="${s.nom}" onchange="majSurface(${i}, 'nom', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1 text-center"><button onclick="ouvrirEditeurPoints(${i})" class="text-cyan-400 hover:text-cyan-300 underline text-xs">${s.points.length} point(s)</button></td>
+                        <td class="p-1 text-center"><input type="checkbox" ${s.visible ? 'checked' : ''} onchange="majSurfaceVisibilite(${i}, this.checked)" class="w-4 h-4 accent-blue-500 cursor-pointer"></td>
+                        <td class="p-1 text-center"><input type="color" value="${hexNombreVersCss(s.couleur)}" onchange="majSurface(${i}, 'couleur', this.value)" class="w-10 h-7 bg-slate-900 border border-slate-700 rounded cursor-pointer"></td>
+                        <td class="p-1"><input type="text" inputmode="decimal" value="${s.opacite}" onchange="majSurface(${i}, 'opacite', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="text" inputmode="decimal" value="${s.epaisseur}" onchange="majSurface(${i}, 'epaisseur', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1 text-center"><button onclick="supprimerSurface(${i})" class="text-red-400 p-1 font-bold">X</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function majSurface(index, champ, valeur) {
+            if (champ === 'nom') donnees_surfaces[index].nom = valeur;
+            else if (champ === 'couleur') donnees_surfaces[index].couleur = cssVersHexNombre(valeur);
+            else donnees_surfaces[index][champ] = parseFloat(String(valeur).replace(',', '.')) || 0;
+            donneesModifiees = true;
+        }
+
+        function majSurfaceVisibilite(index, visible) {
+            donnees_surfaces[index].visible = visible;
+            donneesModifiees = true;
+        }
+
+        function ajouterSurface() {
+            donnees_surfaces.unshift({ nom: "Nouvelle Surface", visible: true, couleur: 0x94a3b8, opacite: 0.85, epaisseur: 0, points: [] });
+            afficherTableauSurfaces();
+            donneesModifiees = true;
+        }
+
+        function supprimerSurface(index) {
+            montrerMessage("Voulez-vous vraiment supprimer cette surface ?", true, (conf) => {
+                if (conf) { donnees_surfaces.splice(index, 1); afficherTableauSurfaces(); donneesModifiees = true; }
+            });
+        }
+
+        function purgerSurfaces() {
+            montrerMessage("Effacer toutes les surfaces ?", true, (conf) => {
+                if (conf) { donnees_surfaces = []; afficherTableauSurfaces(); donneesModifiees = true; }
+            });
+        }
+
+        // --- Édition des points d'une surface (fenêtre secondaire) ---
+        function ouvrirEditeurPoints(index) {
+            indexSurfaceEnEdition = index;
+            document.getElementById('modal-points-nom-surface').innerText = donnees_surfaces[index].nom;
+            afficherTableauPointsSurface();
+            document.getElementById('modal-points-surface').classList.remove('hidden');
+        }
+
+        function fermerEditeurPoints() {
+            document.getElementById('modal-points-surface').classList.add('hidden');
+            indexSurfaceEnEdition = null;
+            afficherTableauSurfaces();
+        }
+
+        function afficherTableauPointsSurface() {
+            const tbody = document.getElementById('table-points-surface-body');
+            tbody.innerHTML = '';
+            donnees_surfaces[indexSurfaceEnEdition].points.forEach((pt, i) => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-800/50">
+                        <td class="p-1"><input type="text" inputmode="decimal" value="${pt.x}" onchange="majPointSurface(${i}, 'x', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'x')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="text" inputmode="decimal" value="${pt.y}" onchange="majPointSurface(${i}, 'y', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'y')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="text" inputmode="decimal" value="${pt.z}" onchange="majPointSurface(${i}, 'z', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'z')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1 text-center"><button onclick="supprimerPointSurface(${i})" class="text-red-400 p-1 font-bold">X</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function majPointSurface(index, champ, valeur) {
+            donnees_surfaces[indexSurfaceEnEdition].points[index][champ] = parseFloat(String(valeur).replace(',', '.')) || 0;
+            donneesModifiees = true;
+        }
+
+        function ajouterPointSurface() {
+            donnees_surfaces[indexSurfaceEnEdition].points.push({ x: centreX || 0, y: centreY || 0, z: centreZ || 0 });
+            afficherTableauPointsSurface();
+            donneesModifiees = true;
+        }
+
+        function supprimerPointSurface(index) {
+            donnees_surfaces[indexSurfaceEnEdition].points.splice(index, 1);
+            afficherTableauPointsSurface();
+            donneesModifiees = true;
+        }
+
+        function gererCollagePointSurface(event, ligneIndex, champ) {
+            event.preventDefault();
+            const texte = (event.clipboardData || window.clipboardData).getData('text');
+            if (!texte) return;
+
+            const lignesCollees = texte.split(/\r\n|\n|\r/).filter(l => l.length > 0).map(l => l.split('\t'));
+            const cols = ['x', 'y', 'z'];
+            const points = donnees_surfaces[indexSurfaceEnEdition].points;
+            const colDepart = cols.indexOf(champ);
+
+            lignesCollees.forEach((valeurs, decalageLigne) => {
+                const cible = ligneIndex + decalageLigne;
+                while (points.length <= cible) points.push({ x: 0, y: 0, z: 0 });
+                valeurs.forEach((valeur, decalageCol) => {
+                    const colCible = colDepart + decalageCol;
+                    if (colCible >= cols.length) return;
+                    points[cible][cols[colCible]] = parseFloat(valeur.trim().replace(',', '.')) || 0;
+                });
+            });
+
+            donneesModifiees = true;
+            afficherTableauPointsSurface();
+        }
+
         // --- COLLAGE TYPE "TABLEUR" DIRECTEMENT DANS LES CELLULES (Ctrl+V depuis Excel) ---
         function creerLigneVide(type) {
             return type === 'tirants'
@@ -634,12 +900,15 @@
             preparerDonnees();
             Object.values(meshes3D).forEach(mesh => scene.remove(mesh));
             meshes3D = {};
+            Object.values(meshesSurfaces).forEach(mesh => scene.remove(mesh));
+            meshesSurfaces = {};
             document.getElementById('labels-container').innerHTML = '';
             labelsList = [];
-            
+
             const clashs = calculerClashs();
             dessinerTirants(clashs);
             dessinerPieux();
+            dessinerSurfaces();
             sauvegarderLocal();
         }
 
@@ -647,6 +916,7 @@
             const appState = {
                 tirants: donnees_tirants,
                 pieux: donnees_pieux,
+                surfaces: donnees_surfaces,
                 config: config,
                 nomGroupeA: document.getElementById('nom-groupe-a').value,
                 nomGroupeB: document.getElementById('nom-groupe-b').value
@@ -665,6 +935,7 @@
                     const data = JSON.parse(saved);
                     if(data.tirants) donnees_tirants = data.tirants;
                     if(data.pieux) donnees_pieux = data.pieux;
+                    if(data.surfaces) donnees_surfaces = data.surfaces;
                     if (data.config) {
                         config.alerteDistance = data.config.alerteDistance || 1.0;
                         config.afficherNoms = data.config.afficherNoms !== false;
@@ -696,6 +967,7 @@
             const clashsInitiaux = calculerClashs();
             dessinerTirants(clashsInitiaux);
             dessinerPieux();
+            dessinerSurfaces();
             animate();
         };
 
