@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- OrbitControls pour tourner autour de la scène -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <!-- Delaunator pour la triangulation des surfaces (toit de rocher, etc.) -->
+    <!-- Delaunator pour la triangulation des surfaces -->
     <script src="https://cdn.jsdelivr.net/npm/delaunator@5/delaunator.min.js"></script>
 
     <style>
@@ -39,10 +39,11 @@
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
 
-        /* Tableaux façon "tableur" : grille fine entre les cellules, pas de bordure en boîte par champ */
+        /* Tableaux façon "tableur" */
         .table-tableur { border-collapse: collapse; }
-        .table-tableur td { padding: 0; border-right: 1px solid #1e293b; border-bottom: 1px solid #1e293b; }
-        .table-tableur input, .table-tableur select {
+        .table-tableur td, .table-tableur th { border-right: 1px solid #1e293b; border-bottom: 1px solid #1e293b; }
+        .table-tableur td { padding: 0; }
+        .table-tableur input[type="text"], .table-tableur select {
             display: block;
             width: 100%;
             background: transparent;
@@ -52,12 +53,13 @@
             font: inherit;
             outline: none;
         }
-        .table-tableur input:focus, .table-tableur select:focus {
+        .table-tableur input[type="text"]:focus, .table-tableur select:focus {
             background: #1e293b;
             box-shadow: inset 0 0 0 2px #3b82f6;
             position: relative;
         }
         .table-tableur tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+        .selected-row { background: rgba(59, 130, 246, 0.15) !important; }
     </style>
 </head>
 <body class="text-sm">
@@ -66,7 +68,7 @@
     <div id="labels-container" style="position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 5; pointer-events: none;"></div>
 
     <div id="ui-layer">
-        <!-- Outils et Paramètres (Flottant à gauche) -->
+        <!-- Outils et Paramètres -->
         <div class="absolute top-4 left-4 pointer-events-auto flex flex-col gap-2 w-80">
             <div class="bg-slate-800/95 backdrop-blur border border-slate-600 rounded p-4 shadow-2xl">
                 <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-300">GeoVisual 3D</h1>
@@ -96,11 +98,14 @@
                 </div>
 
                 <div class="mt-4 pt-3 border-t border-slate-700">
-                    <button onclick="ouvrirGestionnaire()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded shadow transition-colors flex justify-center items-center gap-2 font-semibold">
+                    <button onclick="ouvrirGestionnaire()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded shadow transition-colors flex justify-center items-center gap-2 font-semibold mb-2">
                         Ouvrir Base de Données
                     </button>
+                    <button onclick="purgerToutLeProjet()" class="w-full bg-red-900/50 hover:bg-red-600 border border-red-800 text-red-200 py-1.5 rounded shadow transition-colors flex justify-center items-center gap-2 text-xs font-semibold">
+                        ⚠️ Vider tout le projet
+                    </button>
                     <div class="mt-2 flex justify-between items-center">
-                        <button onclick="reinitialiserDonneesLocales()" class="text-[10px] text-slate-400 hover:text-red-400 underline transition-colors">Réinitialiser l'application</button>
+                        <button onclick="reinitialiserDonneesLocales()" class="text-[10px] text-slate-400 hover:text-red-400 underline transition-colors">Restaurer exemple par défaut</button>
                         <span id="save-indicator" class="text-[10px] text-emerald-400 opacity-0 transition-opacity duration-300">✓ Sauvegardé</span>
                     </div>
                 </div>
@@ -130,15 +135,19 @@
                         </button>
                         <span class="text-slate-400 text-[10px] italic">💡 Astuce : cliquez dans une cellule puis collez (Ctrl+V) directement vos données Excel.</span>
                     </div>
-                    <button onclick="purgerTirants()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer Tirants</button>
+                    <div>
+                        <button onclick="supprimerSelection('tirants')" class="text-yellow-400 hover:text-yellow-300 text-xs underline font-semibold mr-4">Supprimer sélection</button>
+                        <button onclick="purgerTirants()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer tout</button>
+                    </div>
                 </div>
                 <div class="flex-1 overflow-auto p-2 custom-scrollbar">
                     <table class="w-full table-fixed text-left text-sm text-slate-300 table-tableur">
                         <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
                             <tr>
-                                <th class="px-2 py-2 w-14">Groupe</th><th class="px-2 py-2 w-36">Nom</th><th class="px-2 py-2 w-28">X</th>
+                                <th class="px-2 py-2 w-10 text-center"><input type="checkbox" onchange="toggleSelectAll('tirants', this.checked)" class="accent-blue-500 cursor-pointer"></th>
+                                <th class="px-2 py-2 w-28">Groupe</th><th class="px-2 py-2 w-36">Nom</th><th class="px-2 py-2 w-28">X</th>
                                 <th class="px-2 py-2 w-28">Y</th><th class="px-2 py-2 w-24">Z</th><th class="px-2 py-2 w-16">L (m)</th>
-                                <th class="px-2 py-2 w-16">Azimut (°)</th><th class="px-2 py-2 w-16">Incl. (°)</th><th class="px-2 py-2 w-20">Diamètre (m)</th><th class="px-2 py-2 w-12 text-center">Actions</th>
+                                <th class="px-2 py-2 w-16">Azimut</th><th class="px-2 py-2 w-16">Incl.</th><th class="px-2 py-2 w-20">Diamètre</th><th class="px-2 py-2 w-12 text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="table-tirants-body"></tbody>
@@ -153,16 +162,19 @@
                         <button onclick="ajouterLignePieu()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs shadow transition-colors font-semibold">
                             + Nouveau Pieu
                         </button>
-                        <span class="text-slate-400 text-[10px] italic">💡 Astuce : cliquez dans une cellule puis collez (Ctrl+V) directement vos données Excel.</span>
                     </div>
-                    <button onclick="purgerPieux()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer Pieux</button>
+                    <div>
+                        <button onclick="supprimerSelection('pieux')" class="text-yellow-400 hover:text-yellow-300 text-xs underline font-semibold mr-4">Supprimer sélection</button>
+                        <button onclick="purgerPieux()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer tout</button>
+                    </div>
                 </div>
                 <div class="flex-1 overflow-auto p-2 custom-scrollbar">
                     <table class="w-full table-fixed text-left text-sm text-slate-300 table-tableur">
                         <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
                             <tr>
-                                <th class="px-2 py-2 w-14">Groupe</th><th class="px-2 py-2 w-40">Nom</th><th class="px-2 py-2 w-28">X</th><th class="px-2 py-2 w-28">Y</th>
-                                <th class="px-2 py-2 w-24">Z Tête</th><th class="px-2 py-2 w-24">Z Base</th><th class="px-2 py-2 w-20">Diamètre (m)</th>
+                                <th class="px-2 py-2 w-10 text-center"><input type="checkbox" onchange="toggleSelectAll('pieux', this.checked)" class="accent-blue-500 cursor-pointer"></th>
+                                <th class="px-2 py-2 w-28">Groupe</th><th class="px-2 py-2 w-40">Nom</th><th class="px-2 py-2 w-28">X</th><th class="px-2 py-2 w-28">Y</th>
+                                <th class="px-2 py-2 w-24">Z Tête</th><th class="px-2 py-2 w-24">Z Base</th><th class="px-2 py-2 w-20">Diamètre</th>
                                 <th class="px-2 py-2 w-12 text-center">Actions</th>
                             </tr>
                         </thead>
@@ -178,15 +190,18 @@
                         <button onclick="ajouterSurface()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs shadow transition-colors font-semibold">
                             + Nouvelle Surface
                         </button>
-                        <span class="text-slate-400 text-[10px] italic">💡 Astuce : cliquez sur "X point(s)" pour saisir ou coller les coordonnées (X, Y, Z) de la surface.</span>
                     </div>
-                    <button onclick="purgerSurfaces()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer Surfaces</button>
+                    <div>
+                        <button onclick="supprimerSelection('surfaces')" class="text-yellow-400 hover:text-yellow-300 text-xs underline font-semibold mr-4">Supprimer sélection</button>
+                        <button onclick="purgerSurfaces()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer tout</button>
+                    </div>
                 </div>
                 <div class="flex-1 overflow-auto p-2 custom-scrollbar">
                     <table class="w-full table-fixed text-left text-sm text-slate-300 table-tableur">
                         <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
                             <tr>
-                                <th class="px-2 py-2 w-14">Groupe</th><th class="px-2 py-2 w-48">Nom</th><th class="px-2 py-2 w-24 text-center">Points</th>
+                                <th class="px-2 py-2 w-10 text-center"><input type="checkbox" onchange="toggleSelectAll('surfaces', this.checked)" class="accent-blue-500 cursor-pointer"></th>
+                                <th class="px-2 py-2 w-28">Groupe</th><th class="px-2 py-2 w-48">Nom</th><th class="px-2 py-2 w-24 text-center">Points</th>
                                 <th class="px-2 py-2 w-16 text-center">Visible</th><th class="px-2 py-2 w-16 text-center">Couleur</th>
                                 <th class="px-2 py-2 w-20">Opacité</th><th class="px-2 py-2 w-24">Épaisseur (m)</th>
                                 <th class="px-2 py-2 w-12 text-center">Actions</th>
@@ -210,7 +225,6 @@
                 <h2 class="text-lg font-bold text-white">Points de la surface : <span id="modal-points-nom-surface" class="text-cyan-400"></span></h2>
                 <button onclick="fermerEditeurPoints()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
             </div>
-            <p class="text-xs text-slate-400 mb-3">💡 Astuce : cliquez dans une cellule puis collez (Ctrl+V) vos points X, Y, Z depuis Excel.</p>
             <div class="mb-2">
                 <button onclick="ajouterPointSurface()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs shadow transition-colors font-semibold">+ Nouveau Point</button>
             </div>
@@ -228,7 +242,7 @@
         </div>
     </div>
 
-    <!-- MODALE DE MESSAGE PERSONNALISÉE (Z-INDEX TRÈS ÉLEVÉ) -->
+    <!-- MODALE DE MESSAGE PERSONNALISÉE -->
     <div id="custom-modal" class="hidden pointer-events-auto fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md">
         <div class="bg-slate-900 border border-slate-500 rounded-lg shadow-2xl w-full max-w-md p-6 text-center m-4">
             <p id="custom-modal-message" class="text-sm text-slate-200 mb-6 whitespace-pre-line"></p>
@@ -242,23 +256,23 @@
     <script>
         // DONNÉES PAR DÉFAUT
         let donnees_tirants = [
-            {"nom": "T160", "x": 296870.2837, "y": 228309.4547, "z": 166.6, "L": 21.0, "theta": 270.0, "incl": 32.0, "groupe": "A", "diametre": 0.3},
-            {"nom": "T161", "x": 296864.8437, "y": 228309.4487, "z": 166.6, "L": 21.0, "theta": 270.0, "incl": 30.0, "groupe": "A", "diametre": 0.3},
-            {"nom": "T257", "x": 296870.2837, "y": 228309.4547, "z": 160.0, "L": 19.0, "theta": 270.0, "incl": 30.0, "groupe": "A", "diametre": 0.3},
-            {"nom": "C10a", "x": 296875.945, "y": 228292.3271, "z": 166.5, "L": 12.0, "theta": 180.0, "incl": 20.0, "groupe": "B", "diametre": 0.3},
-            {"nom": "C12a", "x": 296875.945, "y": 228295.4215, "z": 166.5, "L": 12.0, "theta": 180.0, "incl": 20.0, "groupe": "B", "diametre": 0.3},
-            {"nom": "C01a", "x": 296862.245, "y": 228287.7545, "z": 166.5, "L": 13.0, "theta": 90.0, "incl": 30.0, "groupe": "B", "diametre": 0.3}
+            {"nom": "T160", "x": 296870.2837, "y": 228309.4547, "z": 166.6, "L": 21.0, "theta": 270.0, "incl": 32.0, "groupe": "Notre Ouvrage (T)", "diametre": 0.3, "selected": false},
+            {"nom": "T161", "x": 296864.8437, "y": 228309.4487, "z": 166.6, "L": 21.0, "theta": 270.0, "incl": 30.0, "groupe": "Notre Ouvrage (T)", "diametre": 0.3, "selected": false},
+            {"nom": "T257", "x": 296870.2837, "y": 228309.4547, "z": 160.0, "L": 19.0, "theta": 270.0, "incl": 30.0, "groupe": "Notre Ouvrage (T)", "diametre": 0.3, "selected": false},
+            {"nom": "C10a", "x": 296875.945, "y": 228292.3271, "z": 166.5, "L": 12.0, "theta": 180.0, "incl": 20.0, "groupe": "Ouvrage Voisin (C)", "diametre": 0.3, "selected": false},
+            {"nom": "C12a", "x": 296875.945, "y": 228295.4215, "z": 166.5, "L": 12.0, "theta": 180.0, "incl": 20.0, "groupe": "Ouvrage Voisin (C)", "diametre": 0.3, "selected": false},
+            {"nom": "C01a", "x": 296862.245, "y": 228287.7545, "z": 166.5, "L": 13.0, "theta": 90.0, "incl": 30.0, "groupe": "Ouvrage Voisin (C)", "diametre": 0.3, "selected": false}
         ];
 
         let donnees_pieux = [
-            {"nom": "P1", "x": 296875.945, "y": 228292.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2, "groupe": "A"},
-            {"nom": "P2", "x": 296875.945, "y": 228295.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2, "groupe": "A"},
-            {"nom": "P3", "x": 296875.945, "y": 228298.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2, "groupe": "A"},
-            {"nom": "P4", "x": 296865.000, "y": 228287.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2, "groupe": "A"}
+            {"nom": "P1", "x": 296875.945, "y": 228292.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2, "groupe": "Notre Ouvrage (T)", "selected": false},
+            {"nom": "P2", "x": 296875.945, "y": 228295.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2, "groupe": "Notre Ouvrage (T)", "selected": false},
+            {"nom": "P3", "x": 296875.945, "y": 228298.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2, "groupe": "Notre Ouvrage (T)", "selected": false},
+            {"nom": "P4", "x": 296865.000, "y": 228287.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2, "groupe": "Notre Ouvrage (T)", "selected": false}
         ];
 
         let donnees_surfaces = [
-            { nom: "Exemple - Toit du Rocher", groupe: "A", visible: true, couleur: 0x8a7968, opacite: 0.85, epaisseur: 0.5, points: [
+            { nom: "Exemple - Toit du Rocher", groupe: "Notre Ouvrage (T)", visible: true, couleur: 0x8a7968, opacite: 0.85, epaisseur: 0.5, selected: false, points: [
                 { x: 296860.0, y: 228285.0, z: 150.0 },
                 { x: 296880.0, y: 228285.0, z: 151.5 },
                 { x: 296880.0, y: 228312.0, z: 149.0 },
@@ -277,18 +291,27 @@
         let callbackModalCustom = null;
         let indexSurfaceEnEdition = null;
 
-        // Ordre des colonnes du tableau, utilisé pour le collage type "tableur"
         const colsTirants = ['groupe', 'nom', 'x', 'y', 'z', 'L', 'theta', 'incl', 'diametre'];
         const colsPieux = ['groupe', 'nom', 'x', 'y', 'zTete', 'zBase', 'diametre'];
         const colsSurfaces = ['groupe', 'nom', 'opacite', 'epaisseur'];
 
-        const classeBordureGroupe = (groupe) => groupe === 'A' ? 'border-l-4 border-blue-500' : 'border-l-4 border-teal-500';
+        const classeBordureGroupe = (groupe) => {
+            const nomA = document.getElementById('nom-groupe-a') ? document.getElementById('nom-groupe-a').value : "Notre Ouvrage (T)";
+            return groupe === nomA ? 'border-l-4 border-blue-500' : 'border-l-4 border-teal-500';
+        };
 
-        // Navigation clavier type "tableur Excel" : flèches, Tab et Entrée passent à la cellule voisine
-        // (en sautant les colonnes sans champ éditable, comme la colonne Actions)
+        const config = { alerteDistance: 1.0, afficherNoms: true, couleurOuvrageT: 0x3b82f6, couleurOuvrageC: 0x14b8a6, couleurClash: 0xef4444 };
+
+        // Assure que toute valeur collée depuis Excel devienne un vrai nombre (supprime espaces insécables)
+        function parseFloatSafe(val) {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            const cleaned = String(val).replace(/[\s\u00A0]/g, '').replace(',', '.');
+            return parseFloat(cleaned) || 0;
+        }
+
         function naviguerCellule(event) {
             if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab'].includes(event.key)) return;
-
             const input = event.target;
             const td = input.closest('td');
             const tr = td ? td.closest('tr') : null;
@@ -298,178 +321,130 @@
             let ligneCible = tr;
             let pas = 0;
 
-            if (event.key === 'ArrowUp') {
-                ligneCible = tr.previousElementSibling;
-            } else if (event.key === 'ArrowDown' || event.key === 'Enter') {
-                ligneCible = event.shiftKey ? tr.previousElementSibling : tr.nextElementSibling;
-            } else if (event.key === 'ArrowLeft') {
-                if (input.selectionStart !== 0 || input.selectionEnd !== 0) return;
-                pas = -1; indexColonne += pas;
-            } else if (event.key === 'ArrowRight') {
-                if (input.selectionStart !== input.value.length || input.selectionEnd !== input.value.length) return;
-                pas = 1; indexColonne += pas;
-            } else if (event.key === 'Tab') {
-                pas = event.shiftKey ? -1 : 1; indexColonne += pas;
-            }
+            if (event.key === 'ArrowUp') ligneCible = tr.previousElementSibling;
+            else if (event.key === 'ArrowDown' || event.key === 'Enter') ligneCible = event.shiftKey ? tr.previousElementSibling : tr.nextElementSibling;
+            else if (event.key === 'ArrowLeft') { if (input.selectionStart !== 0 || input.selectionEnd !== 0) return; pas = -1; indexColonne += pas; }
+            else if (event.key === 'ArrowRight') { if (input.selectionStart !== input.value.length || input.selectionEnd !== input.value.length) return; pas = 1; indexColonne += pas; }
+            else if (event.key === 'Tab') { pas = event.shiftKey ? -1 : 1; indexColonne += pas; }
 
             if (!ligneCible) return;
 
             for (let securite = 0; securite < 50; securite++) {
-                if (indexColonne < 0) {
-                    ligneCible = ligneCible.previousElementSibling;
-                    if (!ligneCible) return;
-                    indexColonne = ligneCible.children.length - 1;
-                } else if (indexColonne >= ligneCible.children.length) {
-                    ligneCible = ligneCible.nextElementSibling;
-                    if (!ligneCible) return;
-                    indexColonne = 0;
-                }
+                if (indexColonne < 0) { ligneCible = ligneCible.previousElementSibling; if (!ligneCible) return; indexColonne = ligneCible.children.length - 1; } 
+                else if (indexColonne >= ligneCible.children.length) { ligneCible = ligneCible.nextElementSibling; if (!ligneCible) return; indexColonne = 0; }
 
                 const cellule = ligneCible.children[indexColonne];
                 const champCible = cellule ? cellule.querySelector('input, select') : null;
-                if (champCible) {
+                if (champCible && champCible.type !== 'checkbox') {
                     event.preventDefault();
                     champCible.focus();
                     return;
                 }
-
                 if (pas === 0) return;
                 indexColonne += pas;
             }
         }
 
-        const config = {
-            alerteDistance: 1.0,
-            afficherNoms: true,
-            couleurOuvrageT: 0x3b82f6,
-            couleurOuvrageC: 0x14b8a6,
-            couleurClash: 0xef4444
-        };
-
-        function montrerMessage(message, avecAnnulation = false, callback = null) {
-            document.getElementById('custom-modal-message').innerText = message;
-            callbackModalCustom = callback;
-            const btnCancel = document.getElementById('custom-modal-cancel');
-            if (avecAnnulation) {
-                btnCancel.classList.remove('hidden');
-            } else {
-                btnCancel.classList.add('hidden');
-            }
-            document.getElementById('custom-modal').classList.remove('hidden');
-        }
-
-        function fermerModalCustom(reponse) {
-            document.getElementById('custom-modal').classList.add('hidden');
-            if (callbackModalCustom) {
-                let cb = callbackModalCustom;
-                callbackModalCustom = null;
-                cb(reponse);
-            }
-        }
-
-        const radians = (deg) => deg * Math.PI / 180.0;
-
-        function shortestDistanceBetweenSegments(p1, p2, p3, p4) {
-            const EPS = 1e-6;
-            let u = new THREE.Vector3().subVectors(p2, p1);
-            let v = new THREE.Vector3().subVectors(p4, p3);
-            let w = new THREE.Vector3().subVectors(p1, p3);
-
-            let a = u.dot(u);
-            let b = u.dot(v);
-            let c = v.dot(v);
-            let d = u.dot(w);
-            let e = v.dot(w);
-
-            let D = a*c - b*b;
-            let sc, sN, sD = D;
-            let tc, tN, tD = D;
-
-            if (D < EPS) {
-                sN = 0.0; sD = 1.0; tN = e; tD = c;
-            } else {
-                sN = (b*e - c*d);
-                tN = (a*e - b*d);
-                if (sN < 0.0) { sN = 0.0; tN = e; tD = c; }
-                else if (sN > sD) { sN = sD; tN = e + b; tD = c; }
-            }
-
-            if (tN < 0.0) {
-                tN = 0.0;
-                if (-d < 0.0) sN = 0.0;
-                else if (-d > a) sN = sD;
-                else { sN = -d; sD = a; }
-            } else if (tN > tD) {
-                tN = tD;
-                if ((-d + b) < 0.0) sN = 0;
-                else if ((-d + b) > a) sN = sD;
-                else { sN = (-d + b); sD = a; }
-            }
-
-            sc = (Math.abs(sN) < EPS ? 0.0 : sN / sD);
-            tc = (Math.abs(tN) < EPS ? 0.0 : tN / tD);
-
-            let dP = new THREE.Vector3()
-                .add(w)
-                .add(u.clone().multiplyScalar(sc))
-                .sub(v.clone().multiplyScalar(tc));
-
-            return dP.length();
-        }
-
         function preparerDonnees() {
             centreX = 0; centreY = 0; centreZ = 0;
-            let totalPointsSurfaces = donnees_surfaces.reduce((n, s) => n + s.points.length, 0);
-            let totalItems = donnees_tirants.length + donnees_pieux.length + totalPointsSurfaces;
+            let validItems = 0;
+            const nomA = document.getElementById('nom-groupe-a').value;
+            const nomB = document.getElementById('nom-groupe-b').value;
 
-            if (totalItems === 0) return;
-
+            // Nettoyage strict des types pour éviter le crash (NaN) de la scène 3D
             donnees_tirants.forEach(t => {
-                let thetaRad = radians(t.theta);
-                let inclRad = radians(t.incl);
+                t.x = parseFloatSafe(t.x); t.y = parseFloatSafe(t.y); t.z = parseFloatSafe(t.z);
+                t.L = parseFloatSafe(t.L); t.theta = parseFloatSafe(t.theta); t.incl = parseFloatSafe(t.incl);
+                t.diametre = parseFloatSafe(t.diametre) || 0.3;
+                
+                // Rétrocompatibilité avec les anciennes sauvegardes (A ou B)
+                if (t.groupe === 'A') t.groupe = nomA;
+                if (t.groupe === 'B') t.groupe = nomB;
+                if(!t.groupe) t.groupe = nomA;
+                
+                t.isNotreOuvrage = (t.groupe === nomA);
+                centreX += t.x; centreY += t.y; centreZ += t.z;
+                validItems++;
+
+                let thetaRad = (t.theta * Math.PI) / 180.0;
+                let inclRad = (t.incl * Math.PI) / 180.0;
                 t.xFin = t.x + t.L * Math.cos(inclRad) * Math.cos(thetaRad);
                 t.yFin = t.y + t.L * Math.cos(inclRad) * Math.sin(thetaRad);
                 t.zFin = t.z - t.L * Math.sin(inclRad);
-
-                if(!t.groupe) t.groupe = t.nom.toUpperCase().startsWith("T") ? "A" : "B";
-                if(!t.diametre) t.diametre = 0.3;
-                t.isNotreOuvrage = (t.groupe === "A");
             });
 
-            donnees_pieux.forEach(p => { if(!p.groupe) p.groupe = "A"; });
-            donnees_surfaces.forEach(s => { if(!s.groupe) s.groupe = "A"; });
+            donnees_pieux.forEach(p => {
+                p.x = parseFloatSafe(p.x); p.y = parseFloatSafe(p.y);
+                p.zTete = parseFloatSafe(p.zTete); p.zBase = parseFloatSafe(p.zBase);
+                p.diametre = parseFloatSafe(p.diametre) || 1.2;
+                
+                if (p.groupe === 'A') p.groupe = nomA;
+                if (p.groupe === 'B') p.groupe = nomB;
+                if(!p.groupe) p.groupe = nomA;
 
-            donnees_tirants.forEach(t => { centreX += t.x; centreY += t.y; centreZ += t.z; });
-            donnees_pieux.forEach(p => { centreX += p.x; centreY += p.y; centreZ += p.zTete; });
-            donnees_surfaces.forEach(s => { s.points.forEach(pt => { centreX += pt.x; centreY += pt.y; centreZ += pt.z; }); });
+                centreX += p.x; centreY += p.y; centreZ += p.zTete;
+                validItems++;
+            });
 
-            centreX /= totalItems;
-            centreY /= totalItems;
-            centreZ /= totalItems;
+            donnees_surfaces.forEach(s => {
+                if (s.groupe === 'A') s.groupe = nomA;
+                if (s.groupe === 'B') s.groupe = nomB;
+                if(!s.groupe) s.groupe = nomA;
+                s.points.forEach(pt => {
+                    pt.x = parseFloatSafe(pt.x); pt.y = parseFloatSafe(pt.y); pt.z = parseFloatSafe(pt.z);
+                    centreX += pt.x; centreY += pt.y; centreZ += pt.z;
+                    validItems++;
+                });
+            });
+
+            if (validItems === 0) return;
+
+            centreX /= validItems;
+            centreY /= validItems;
+            centreZ /= validItems;
 
             donnees_tirants.forEach(t => {
                 t.p0 = new THREE.Vector3(t.x - centreX, t.z - centreZ, -(t.y - centreY));
                 t.p1 = new THREE.Vector3(t.xFin - centreX, t.zFin - centreZ, -(t.yFin - centreY));
             });
-
             donnees_pieux.forEach(p => {
                 p.p0 = new THREE.Vector3(p.x - centreX, p.zTete - centreZ, -(p.y - centreY));
                 p.p1 = new THREE.Vector3(p.x - centreX, p.zBase - centreZ, -(p.y - centreY));
             });
         }
 
+        function shortestDistanceBetweenSegments(p1, p2, p3, p4) {
+            const EPS = 1e-6;
+            let u = new THREE.Vector3().subVectors(p2, p1), v = new THREE.Vector3().subVectors(p4, p3), w = new THREE.Vector3().subVectors(p1, p3);
+            let a = u.dot(u), b = u.dot(v), c = v.dot(v), d = u.dot(w), e = v.dot(w);
+            let D = a*c - b*b;
+            let sc, sN, sD = D, tc, tN, tD = D;
+
+            if (D < EPS) { sN = 0.0; sD = 1.0; tN = e; tD = c; } 
+            else {
+                sN = (b*e - c*d); tN = (a*e - b*d);
+                if (sN < 0.0) { sN = 0.0; tN = e; tD = c; }
+                else if (sN > sD) { sN = sD; tN = e + b; tD = c; }
+            }
+            if (tN < 0.0) {
+                tN = 0.0;
+                if (-d < 0.0) sN = 0.0; else if (-d > a) sN = sD; else { sN = -d; sD = a; }
+            } else if (tN > tD) {
+                tN = tD;
+                if ((-d + b) < 0.0) sN = 0; else if ((-d + b) > a) sN = sD; else { sN = (-d + b); sD = a; }
+            }
+            sc = (Math.abs(sN) < EPS ? 0.0 : sN / sD); tc = (Math.abs(tN) < EPS ? 0.0 : tN / tD);
+            let dP = new THREE.Vector3().add(w).add(u.clone().multiplyScalar(sc)).sub(v.clone().multiplyScalar(tc));
+            return dP.length();
+        }
+
         function calculerClashs() {
             let interactions = [];
             for (let i = 0; i < donnees_tirants.length; i++) {
                 for (let j = i + 1; j < donnees_tirants.length; j++) {
-                    let t1 = donnees_tirants[i];
-                    let t2 = donnees_tirants[j];
-
-                    if (t1.groupe !== t2.groupe) {
-                        let dist = shortestDistanceBetweenSegments(t1.p0, t1.p1, t2.p0, t2.p1);
-                        if (dist <= config.alerteDistance) {
-                            interactions.push({ nomT: t1.nom, nomC: t2.nom, distance: dist });
-                        }
+                    let t1 = donnees_tirants[i], t2 = donnees_tirants[j];
+                    if (t1.groupe !== t2.groupe && shortestDistanceBetweenSegments(t1.p0, t1.p1, t2.p0, t2.p1) <= config.alerteDistance) {
+                        interactions.push({ nomT: t1.nom, nomC: t2.nom });
                     }
                 }
             }
@@ -478,96 +453,62 @@
 
         function init3D() {
             const container = document.getElementById('canvas-container');
-            
             scene = new THREE.Scene();
             const gridHelper = new THREE.GridHelper(100, 100, 0x334155, 0x1e293b);
-            gridHelper.position.y = -15;
-            scene.add(gridHelper);
-
+            gridHelper.position.y = -15; scene.add(gridHelper);
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(20, 20, 40);
-
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
             container.appendChild(renderer.domElement);
-
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-            
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
             const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(10, 20, 10);
-            scene.add(dirLight);
-
+            dirLight.position.set(10, 20, 10); scene.add(dirLight);
+            
             controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
+            controls.enableDamping = true; 
             controls.dampingFactor = 0.05;
+
+            // CONFIGURATION DES BOUTONS DE LA SOURIS (Pan sur la molette / clic central)
+            controls.mouseButtons = {
+                LEFT: THREE.MOUSE.ROTATE,
+                MIDDLE: THREE.MOUSE.PAN,
+                RIGHT: THREE.MOUSE.DOLLY
+            };
         }
 
         function dessinerTirants(clashs) {
-            const nomsEnClash = new Set();
-            clashs.forEach(c => { nomsEnClash.add(c.nomT); nomsEnClash.add(c.nomC); });
-
-            const cylinderRadialSegments = 8;
-
+            const nomsEnClash = new Set(); clashs.forEach(c => { nomsEnClash.add(c.nomT); nomsEnClash.add(c.nomC); });
             donnees_tirants.forEach(t => {
                 const direction = new THREE.Vector3().subVectors(t.p1, t.p0);
-                const longueur = direction.length();
-                
-                const rayon = t.diametre / 2.0;
-                const geometry = new THREE.CylinderGeometry(rayon, rayon, longueur, cylinderRadialSegments);
-                const axis = new THREE.Vector3(0, 1, 0);
-                direction.normalize();
-                
-                const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction);
-                const midPoint = new THREE.Vector3().addVectors(t.p0, t.p1).multiplyScalar(0.5);
-
+                const geometry = new THREE.CylinderGeometry(t.diametre/2, t.diametre/2, direction.length(), 8);
+                const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
                 let colorHex = t.isNotreOuvrage ? config.couleurOuvrageT : config.couleurOuvrageC;
                 if (nomsEnClash.has(t.nom)) colorHex = config.couleurClash;
-
-                const material = new THREE.MeshPhongMaterial({ color: colorHex, shininess: 50 });
-                const mesh = new THREE.Mesh(geometry, material);
-                
-                mesh.position.copy(midPoint);
+                const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: colorHex, shininess: 50 }));
+                mesh.position.copy(new THREE.Vector3().addVectors(t.p0, t.p1).multiplyScalar(0.5));
                 mesh.quaternion.copy(quaternion);
-                
-                scene.add(mesh);
-                meshes3D[t.nom] = mesh;
-
+                scene.add(mesh); meshes3D[t.nom] = mesh;
                 creerLabel(t.nom, t.p0, colorHex);
             });
         }
 
         function dessinerPieux() {
-            const cylinderRadialSegments = 16;
-
+            const nomA = document.getElementById('nom-groupe-a').value;
             donnees_pieux.forEach(p => {
                 const direction = new THREE.Vector3().subVectors(p.p1, p.p0);
-                const longueur = direction.length();
-                const rayon = p.diametre / 2.0;
-                
-                const geometry = new THREE.CylinderGeometry(rayon, rayon, longueur, cylinderRadialSegments);
-                const axis = new THREE.Vector3(0, 1, 0);
-                direction.normalize();
-                
-                const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction);
-                const midPoint = new THREE.Vector3().addVectors(p.p0, p.p1).multiplyScalar(0.5);
-
-                const colorHex = p.groupe === 'A' ? config.couleurOuvrageT : config.couleurOuvrageC;
-                const material = new THREE.MeshPhongMaterial({ color: colorHex, shininess: 10 });
-                const mesh = new THREE.Mesh(geometry, material);
-
-                mesh.position.copy(midPoint);
+                const geometry = new THREE.CylinderGeometry(p.diametre/2, p.diametre/2, direction.length(), 16);
+                const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+                const colorHex = p.groupe === nomA ? config.couleurOuvrageT : config.couleurOuvrageC;
+                const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: colorHex, shininess: 10 }));
+                mesh.position.copy(new THREE.Vector3().addVectors(p.p0, p.p1).multiplyScalar(0.5));
                 mesh.quaternion.copy(quaternion);
-
-                scene.add(mesh);
-                meshes3D[p.nom] = mesh;
-
+                scene.add(mesh); meshes3D[p.nom] = mesh;
                 creerLabel(p.nom, p.p0, colorHex);
             });
         }
 
-        // Renvoie les arêtes qui n'appartiennent qu'à un seul triangle (le contour de la surface)
         function trouverAretesBordure(triangles) {
             const compteur = new Map();
             for (let t = 0; t < triangles.length; t += 3) {
@@ -575,410 +516,166 @@
                 for (let k = 0; k < 3; k++) {
                     const a = tri[k], b = tri[(k + 1) % 3];
                     const cle = a < b ? `${a}_${b}` : `${b}_${a}`;
-                    if (compteur.has(cle)) compteur.get(cle).nb++;
-                    else compteur.set(cle, { nb: 1, i: a, j: b });
+                    if (compteur.has(cle)) compteur.get(cle).nb++; else compteur.set(cle, { nb: 1, i: a, j: b });
                 }
             }
-            const bordures = [];
-            compteur.forEach(v => { if (v.nb === 1) bordures.push([v.i, v.j]); });
-            return bordures;
+            const bordures = []; compteur.forEach(v => { if (v.nb === 1) bordures.push([v.i, v.j]); }); return bordures;
         }
 
-        // Triangule les points (X, Y) de la surface et construit sa géométrie 3D (avec épaisseur éventuelle)
         function construireGeometrieSurface(surface) {
             if (!surface.points || surface.points.length < 3) return null;
-
             const delaunay = Delaunator.from(surface.points, p => p.x, p => p.y);
             const triangles = delaunay.triangles;
-
-            const sommetHaut = (idx) => {
-                const p = surface.points[idx];
-                return [p.x - centreX, p.z - centreZ, -(p.y - centreY)];
-            };
-            const sommetBas = (idx) => {
-                const p = surface.points[idx];
-                return [p.x - centreX, (p.z - surface.epaisseur) - centreZ, -(p.y - centreY)];
-            };
-
+            const sommetHaut = (idx) => [surface.points[idx].x - centreX, surface.points[idx].z - centreZ, -(surface.points[idx].y - centreY)];
+            const sommetBas = (idx) => [surface.points[idx].x - centreX, (surface.points[idx].z - surface.epaisseur) - centreZ, -(surface.points[idx].y - centreY)];
             const positions = [];
-            for (let t = 0; t < triangles.length; t += 3) {
-                const [a, b, c] = [triangles[t], triangles[t + 1], triangles[t + 2]];
-                positions.push(...sommetHaut(a), ...sommetHaut(b), ...sommetHaut(c));
-            }
-
+            for (let t = 0; t < triangles.length; t += 3) { positions.push(...sommetHaut(triangles[t]), ...sommetHaut(triangles[t + 1]), ...sommetHaut(triangles[t + 2])); }
             if (surface.epaisseur > 0) {
-                for (let t = 0; t < triangles.length; t += 3) {
-                    const [a, b, c] = [triangles[t], triangles[t + 1], triangles[t + 2]];
-                    positions.push(...sommetBas(a), ...sommetBas(c), ...sommetBas(b));
-                }
-
+                for (let t = 0; t < triangles.length; t += 3) { positions.push(...sommetBas(triangles[t]), ...sommetBas(triangles[t + 2]), ...sommetBas(triangles[t + 1])); }
                 trouverAretesBordure(triangles).forEach(([i, j]) => {
-                    const ti = sommetHaut(i), tj = sommetHaut(j);
-                    const bi = sommetBas(i), bj = sommetBas(j);
-                    positions.push(...ti, ...tj, ...bj);
-                    positions.push(...ti, ...bj, ...bi);
+                    const ti = sommetHaut(i), tj = sommetHaut(j), bi = sommetBas(i), bj = sommetBas(j);
+                    positions.push(...ti, ...tj, ...bj, ...ti, ...bj, ...bi);
                 });
             }
-
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            geometry.computeVertexNormals();
-            return geometry;
+            geometry.computeVertexNormals(); return geometry;
         }
 
         function dessinerSurfaces() {
             donnees_surfaces.forEach((s, i) => {
                 if (!s.visible) return;
-                const geometry = construireGeometrieSurface(s);
-                if (!geometry) return;
-
-                const material = new THREE.MeshPhongMaterial({
-                    color: s.couleur,
-                    opacity: s.opacite,
-                    transparent: s.opacite < 1,
-                    side: THREE.DoubleSide,
-                    shininess: 15
-                });
-                const mesh = new THREE.Mesh(geometry, material);
-                scene.add(mesh);
-                meshesSurfaces[i] = mesh;
+                const geometry = construireGeometrieSurface(s); if (!geometry) return;
+                const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: s.couleur, opacity: s.opacite, transparent: s.opacite < 1, side: THREE.DoubleSide, shininess: 15 }));
+                scene.add(mesh); meshesSurfaces[i] = mesh;
             });
         }
 
         function creerLabel(texte, position, couleurHex) {
-            const div = document.createElement('div');
-            div.className = 'anchor-label';
-            div.innerText = texte;
+            const div = document.createElement('div'); div.className = 'anchor-label'; div.innerText = texte;
             div.style.borderBottom = `2px solid #${couleurHex.toString(16).padStart(6, '0')}`;
-            document.getElementById('labels-container').appendChild(div);
-            labelsList.push({ element: div, pos: position });
+            document.getElementById('labels-container').appendChild(div); labelsList.push({ element: div, pos: position });
         }
 
         function mettreAJourLabels() {
             labelsList.forEach(label => {
-                const vector = label.pos.clone();
-                vector.project(camera);
-                if (vector.z > 1) {
-                    label.element.style.display = 'none';
-                    return;
-                }
+                const vector = label.pos.clone().project(camera);
+                if (vector.z > 1) { label.element.style.display = 'none'; return; }
                 label.element.style.display = 'block';
-                const x = (vector.x * .5 + .5) * window.innerWidth;
-                const y = (vector.y * -.5 + .5) * window.innerHeight;
-                label.element.style.left = `${x}px`;
-                label.element.style.top = `${y}px`;
+                label.element.style.left = `${(vector.x * .5 + .5) * window.innerWidth}px`;
+                label.element.style.top = `${(vector.y * -.5 + .5) * window.innerHeight}px`;
             });
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-            mettreAJourLabels();
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); mettreAJourLabels(); }
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+        function toggleSelectAll(type, checked) {
+            if (type === 'tirants') { donnees_tirants.forEach(d => d.selected = checked); afficherTableauDonnees(); }
+            else if (type === 'pieux') { donnees_pieux.forEach(d => d.selected = checked); afficherTableauPieux(); }
+            else { donnees_surfaces.forEach(d => d.selected = checked); afficherTableauSurfaces(); }
         }
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        document.getElementById('alert-threshold').addEventListener('change', (e) => {
-            config.alerteDistance = parseFloat(e.target.value);
-            rafraichirApplication();
-        });
-
-        function toggleAffichageNoms() {
-            const affiche = document.getElementById('toggle-noms').checked;
-            config.afficherNoms = affiche;
-            document.getElementById('labels-container').style.display = affiche ? 'block' : 'none';
-            sauvegarderLocal();
-        }
-
-        function switchTab(tab) {
-            const styleActif = 'px-4 py-1.5 rounded text-sm bg-blue-600 text-white font-semibold transition-colors';
-            const styleInactif = 'px-4 py-1.5 rounded text-sm text-slate-400 hover:text-white transition-colors';
-
-            ['tirants', 'pieux', 'surfaces'].forEach(t => {
-                document.getElementById('view-' + t).classList.toggle('hidden', tab !== t);
-                document.getElementById('tab-btn-' + t).className = tab === t ? styleActif : styleInactif;
+        function supprimerSelection(type) {
+            const count = (type === 'tirants' ? donnees_tirants : (type === 'pieux' ? donnees_pieux : donnees_surfaces)).filter(d => d.selected).length;
+            if(count === 0) return montrerMessage("Aucun élément n'a été coché.");
+            montrerMessage(`Supprimer les ${count} élément(s) sélectionné(s) ?`, true, (conf) => {
+                if (conf) {
+                    if (type === 'tirants') { donnees_tirants = donnees_tirants.filter(d => !d.selected); afficherTableauDonnees(); }
+                    if (type === 'pieux') { donnees_pieux = donnees_pieux.filter(d => !d.selected); afficherTableauPieux(); }
+                    if (type === 'surfaces') { donnees_surfaces = donnees_surfaces.filter(d => !d.selected); afficherTableauSurfaces(); }
+                    donneesModifiees = true;
+                }
             });
-        }
-
-        function ouvrirGestionnaire() {
-            donneesModifiees = false;
-            afficherTableauDonnees();
-            afficherTableauPieux();
-            afficherTableauSurfaces();
-            document.getElementById('modal-gestionnaire').classList.remove('hidden');
-        }
-
-        function fermerGestionnaire() {
-            document.getElementById('modal-gestionnaire').classList.add('hidden');
-            if (donneesModifiees) { rafraichirApplication(); }
         }
 
         function afficherTableauDonnees() {
-            const tbody = document.getElementById('table-tirants-body');
-            tbody.innerHTML = '';
+            const tbody = document.getElementById('table-tirants-body'); tbody.innerHTML = '';
             donnees_tirants.forEach((t, i) => {
-                if(!t.groupe) t.groupe = "A";
-                if(!t.diametre) t.diametre = 0.3;
-                const bordureGroupe = classeBordureGroupe(t.groupe);
-                const nomGroupe = t.groupe === 'A' ? document.getElementById('nom-groupe-a').value : document.getElementById('nom-groupe-b').value;
+                const bordure = classeBordureGroupe(t.groupe);
                 tbody.innerHTML += `
-                    <tr>
-                        <td><input type="text" value="${t.groupe}" title="${nomGroupe}" onchange="majTirant(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-center uppercase ${bordureGroupe}"></td>
+                    <tr class="${t.selected ? 'selected-row' : ''}">
+                        <td class="text-center"><input type="checkbox" ${t.selected ? 'checked' : ''} onchange="donnees_tirants[${i}].selected = this.checked; afficherTableauDonnees()" class="accent-blue-500 cursor-pointer w-4 h-4"></td>
+                        <td><input type="text" value="${t.groupe}" onchange="majTirant(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="font-bold ${bordure}"></td>
                         <td><input type="text" value="${t.nom}" onchange="majTirant(${i}, 'nom', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'nom')" onkeydown="naviguerCellule(event)" onfocus="this.select()"></td>
-                        <td><input type="text" inputmode="decimal" value="${t.x}" onchange="majTirant(${i}, 'x', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${t.y}" onchange="majTirant(${i}, 'y', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${t.z}" onchange="majTirant(${i}, 'z', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'z')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${t.L}" onchange="majTirant(${i}, 'L', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'L')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${t.theta}" onchange="majTirant(${i}, 'theta', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'theta')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${t.incl}" onchange="majTirant(${i}, 'incl', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'incl')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${t.diametre}" onchange="majTirant(${i}, 'diametre', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'diametre')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${t.x}" onchange="majTirant(${i}, 'x', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${t.y}" onchange="majTirant(${i}, 'y', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${t.z}" onchange="majTirant(${i}, 'z', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'z')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${t.L}" onchange="majTirant(${i}, 'L', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'L')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${t.theta}" onchange="majTirant(${i}, 'theta', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'theta')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${t.incl}" onchange="majTirant(${i}, 'incl', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'incl')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${t.diametre}" onchange="majTirant(${i}, 'diametre', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'diametre')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
                         <td class="text-center py-1"><button onclick="supprimerTirant(${i})" class="text-red-400 hover:text-red-300 font-bold">X</button></td>
                     </tr>
                 `;
             });
         }
 
-        function majTirant(index, champ, valeur) {
-            affecterValeurCellule(donnees_tirants[index], champ, valeur);
-            donneesModifiees = true;
-            if (champ === 'groupe') afficherTableauDonnees();
-        }
-
-        function supprimerTirant(index) {
-            montrerMessage("Voulez-vous vraiment supprimer ce tirant ?", true, (conf) => {
-                if (conf) { donnees_tirants.splice(index, 1); afficherTableauDonnees(); donneesModifiees = true; }
-            });
-        }
-
-        function ajouterLigneTirant() {
-            donnees_tirants.unshift(creerLigneVide('tirants'));
-            afficherTableauDonnees(); donneesModifiees = true;
-        }
-
-        function purgerTirants() {
-            montrerMessage("Effacer tous les tirants ?", true, (conf) => {
-                if (conf) { donnees_tirants = []; afficherTableauDonnees(); donneesModifiees = true; }
-            });
-        }
-
         function afficherTableauPieux() {
-            const tbody = document.getElementById('table-pieux-body');
-            tbody.innerHTML = '';
+            const tbody = document.getElementById('table-pieux-body'); tbody.innerHTML = '';
             donnees_pieux.forEach((p, i) => {
-                if(!p.groupe) p.groupe = "A";
-                const bordureGroupe = classeBordureGroupe(p.groupe);
-                const nomGroupe = p.groupe === 'A' ? document.getElementById('nom-groupe-a').value : document.getElementById('nom-groupe-b').value;
+                const bordure = classeBordureGroupe(p.groupe);
                 tbody.innerHTML += `
-                    <tr>
-                        <td><input type="text" value="${p.groupe}" title="${nomGroupe}" onchange="majPieu(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-center uppercase ${bordureGroupe}"></td>
+                    <tr class="${p.selected ? 'selected-row' : ''}">
+                        <td class="text-center"><input type="checkbox" ${p.selected ? 'checked' : ''} onchange="donnees_pieux[${i}].selected = this.checked; afficherTableauPieux()" class="accent-blue-500 cursor-pointer w-4 h-4"></td>
+                        <td><input type="text" value="${p.groupe}" onchange="majPieu(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="font-bold ${bordure}"></td>
                         <td><input type="text" value="${p.nom}" onchange="majPieu(${i}, 'nom', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'nom')" onkeydown="naviguerCellule(event)" onfocus="this.select()"></td>
-                        <td><input type="text" inputmode="decimal" value="${p.x}" onchange="majPieu(${i}, 'x', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${p.y}" onchange="majPieu(${i}, 'y', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${p.zTete}" onchange="majPieu(${i}, 'zTete', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'zTete')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${p.zBase}" onchange="majPieu(${i}, 'zBase', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'zBase')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${p.diametre}" onchange="majPieu(${i}, 'diametre', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'diametre')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${p.x}" onchange="majPieu(${i}, 'x', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${p.y}" onchange="majPieu(${i}, 'y', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${p.zTete}" onchange="majPieu(${i}, 'zTete', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'zTete')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${p.zBase}" onchange="majPieu(${i}, 'zBase', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'zBase')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${p.diametre}" onchange="majPieu(${i}, 'diametre', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'diametre')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
                         <td class="text-center py-1"><button onclick="supprimerPieu(${i})" class="text-red-400 hover:text-red-300 font-bold">X</button></td>
                     </tr>
                 `;
             });
         }
 
-        function majPieu(index, champ, valeur) {
-            affecterValeurCellule(donnees_pieux[index], champ, valeur);
-            donneesModifiees = true;
-        }
-
-        function supprimerPieu(index) {
-            montrerMessage("Voulez-vous vraiment supprimer ce pieu ?", true, (conf) => {
-                if (conf) { donnees_pieux.splice(index, 1); afficherTableauPieux(); donneesModifiees = true; }
-            });
-        }
-
-        function ajouterLignePieu() {
-            donnees_pieux.unshift(creerLigneVide('pieux'));
-            afficherTableauPieux(); donneesModifiees = true;
-        }
-
-        function purgerPieux() {
-            montrerMessage("Effacer tous les pieux ?", true, (conf) => {
-                if (conf) { donnees_pieux = []; afficherTableauPieux(); donneesModifiees = true; }
-            });
-        }
-
-        // --- SURFACES (triangulation Delaunay des points X, Y, Z) ---
-        const hexNombreVersCss = (hex) => '#' + hex.toString(16).padStart(6, '0');
-        const cssVersHexNombre = (css) => parseInt(css.replace('#', ''), 16);
-
         function afficherTableauSurfaces() {
-            const tbody = document.getElementById('table-surfaces-body');
-            tbody.innerHTML = '';
+            const tbody = document.getElementById('table-surfaces-body'); tbody.innerHTML = '';
             donnees_surfaces.forEach((s, i) => {
-                if(!s.groupe) s.groupe = "A";
-                const bordureGroupe = classeBordureGroupe(s.groupe);
-                const nomGroupe = s.groupe === 'A' ? document.getElementById('nom-groupe-a').value : document.getElementById('nom-groupe-b').value;
+                const bordure = classeBordureGroupe(s.groupe);
                 tbody.innerHTML += `
-                    <tr>
-                        <td><input type="text" value="${s.groupe}" title="${nomGroupe}" onchange="majSurface(${i}, 'groupe', this.value)" onpaste="gererCollageSurface(event, ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-center uppercase ${bordureGroupe}"></td>
+                    <tr class="${s.selected ? 'selected-row' : ''}">
+                        <td class="text-center"><input type="checkbox" ${s.selected ? 'checked' : ''} onchange="donnees_surfaces[${i}].selected = this.checked; afficherTableauSurfaces()" class="accent-blue-500 cursor-pointer w-4 h-4"></td>
+                        <td><input type="text" value="${s.groupe}" onchange="majSurface(${i}, 'groupe', this.value)" onpaste="gererCollageSurface(event, ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="font-bold ${bordure}"></td>
                         <td><input type="text" value="${s.nom}" onchange="majSurface(${i}, 'nom', this.value)" onpaste="gererCollageSurface(event, ${i}, 'nom')" onkeydown="naviguerCellule(event)" onfocus="this.select()"></td>
                         <td class="text-center py-1"><button onclick="ouvrirEditeurPoints(${i})" class="text-cyan-400 hover:text-cyan-300 underline text-xs">${s.points.length} point(s)</button></td>
                         <td class="text-center py-1"><input type="checkbox" ${s.visible ? 'checked' : ''} onchange="majSurfaceVisibilite(${i}, this.checked)" class="w-4 h-4 accent-blue-500 cursor-pointer"></td>
-                        <td class="text-center py-1"><input type="color" value="${hexNombreVersCss(s.couleur)}" onchange="majSurface(${i}, 'couleur', this.value)" class="w-10 h-6 bg-slate-900 border border-slate-700 rounded cursor-pointer"></td>
-                        <td><input type="text" inputmode="decimal" value="${s.opacite}" onchange="majSurface(${i}, 'opacite', this.value)" onpaste="gererCollageSurface(event, ${i}, 'opacite')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${s.epaisseur}" onchange="majSurface(${i}, 'epaisseur', this.value)" onpaste="gererCollageSurface(event, ${i}, 'epaisseur')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td class="text-center py-1"><input type="color" value="${'#'+s.couleur.toString(16).padStart(6, '0')}" onchange="majSurface(${i}, 'couleur', this.value)" class="w-10 h-6 bg-slate-900 border border-slate-700 rounded cursor-pointer"></td>
+                        <td><input type="text" value="${s.opacite}" onchange="majSurface(${i}, 'opacite', this.value)" onpaste="gererCollageSurface(event, ${i}, 'opacite')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" value="${s.epaisseur}" onchange="majSurface(${i}, 'epaisseur', this.value)" onpaste="gererCollageSurface(event, ${i}, 'epaisseur')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
                         <td class="text-center py-1"><button onclick="supprimerSurface(${i})" class="text-red-400 hover:text-red-300 font-bold">X</button></td>
                     </tr>
                 `;
             });
         }
 
-        function majSurface(index, champ, valeur) {
-            if (champ === 'couleur') donnees_surfaces[index].couleur = cssVersHexNombre(valeur);
-            else if (champ === 'nom' || champ === 'groupe') affecterValeurCellule(donnees_surfaces[index], champ, valeur);
-            else donnees_surfaces[index][champ] = parseFloat(String(valeur).replace(',', '.')) || 0;
-            donneesModifiees = true;
-            if (champ === 'groupe') afficherTableauSurfaces();
-        }
-
-        function gererCollageSurface(event, ligneIndex, champ) {
-            event.preventDefault();
-            const texte = (event.clipboardData || window.clipboardData).getData('text');
-            if (!texte) return;
-
-            const lignesCollees = texte.split(/\r\n|\n|\r/).filter(l => l.length > 0).map(l => l.split('\t'));
-            const colDepart = colsSurfaces.indexOf(champ);
-
-            lignesCollees.forEach((valeurs, decalageLigne) => {
-                const cible = ligneIndex + decalageLigne;
-                if (cible >= donnees_surfaces.length) return;
-                valeurs.forEach((valeur, decalageCol) => {
-                    const colCible = colDepart + decalageCol;
-                    if (colCible >= colsSurfaces.length) return;
-                    majSurface(cible, colsSurfaces[colCible], valeur);
-                });
-            });
-
-            afficherTableauSurfaces();
-        }
-
-        function majSurfaceVisibilite(index, visible) {
-            donnees_surfaces[index].visible = visible;
-            donneesModifiees = true;
-        }
-
-        function ajouterSurface() {
-            donnees_surfaces.unshift({ nom: "Nouvelle Surface", groupe: "A", visible: true, couleur: 0x94a3b8, opacite: 0.85, epaisseur: 0, points: [] });
-            afficherTableauSurfaces();
-            donneesModifiees = true;
-        }
-
-        function supprimerSurface(index) {
-            montrerMessage("Voulez-vous vraiment supprimer cette surface ?", true, (conf) => {
-                if (conf) { donnees_surfaces.splice(index, 1); afficherTableauSurfaces(); donneesModifiees = true; }
-            });
-        }
-
-        function purgerSurfaces() {
-            montrerMessage("Effacer toutes les surfaces ?", true, (conf) => {
-                if (conf) { donnees_surfaces = []; afficherTableauSurfaces(); donneesModifiees = true; }
-            });
-        }
-
-        // --- Édition des points d'une surface (fenêtre secondaire) ---
-        function ouvrirEditeurPoints(index) {
-            indexSurfaceEnEdition = index;
-            document.getElementById('modal-points-nom-surface').innerText = donnees_surfaces[index].nom;
-            afficherTableauPointsSurface();
-            document.getElementById('modal-points-surface').classList.remove('hidden');
-        }
-
-        function fermerEditeurPoints() {
-            document.getElementById('modal-points-surface').classList.add('hidden');
-            indexSurfaceEnEdition = null;
-            afficherTableauSurfaces();
-        }
-
-        function afficherTableauPointsSurface() {
-            const tbody = document.getElementById('table-points-surface-body');
-            tbody.innerHTML = '';
-            donnees_surfaces[indexSurfaceEnEdition].points.forEach((pt, i) => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td><input type="text" inputmode="decimal" value="${pt.x}" onchange="majPointSurface(${i}, 'x', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${pt.y}" onchange="majPointSurface(${i}, 'y', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td><input type="text" inputmode="decimal" value="${pt.z}" onchange="majPointSurface(${i}, 'z', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'z')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
-                        <td class="text-center py-1"><button onclick="supprimerPointSurface(${i})" class="text-red-400 hover:text-red-300 font-bold">X</button></td>
-                    </tr>
-                `;
-            });
-        }
-
-        function majPointSurface(index, champ, valeur) {
-            donnees_surfaces[indexSurfaceEnEdition].points[index][champ] = parseFloat(String(valeur).replace(',', '.')) || 0;
-            donneesModifiees = true;
-        }
-
-        function ajouterPointSurface() {
-            donnees_surfaces[indexSurfaceEnEdition].points.push({ x: centreX || 0, y: centreY || 0, z: centreZ || 0 });
-            afficherTableauPointsSurface();
-            donneesModifiees = true;
-        }
-
-        function supprimerPointSurface(index) {
-            donnees_surfaces[indexSurfaceEnEdition].points.splice(index, 1);
-            afficherTableauPointsSurface();
-            donneesModifiees = true;
-        }
-
-        function gererCollagePointSurface(event, ligneIndex, champ) {
-            event.preventDefault();
-            const texte = (event.clipboardData || window.clipboardData).getData('text');
-            if (!texte) return;
-
-            const lignesCollees = texte.split(/\r\n|\n|\r/).filter(l => l.length > 0).map(l => l.split('\t'));
-            const cols = ['x', 'y', 'z'];
-            const points = donnees_surfaces[indexSurfaceEnEdition].points;
-            const colDepart = cols.indexOf(champ);
-
-            lignesCollees.forEach((valeurs, decalageLigne) => {
-                const cible = ligneIndex + decalageLigne;
-                while (points.length <= cible) points.push({ x: 0, y: 0, z: 0 });
-                valeurs.forEach((valeur, decalageCol) => {
-                    const colCible = colDepart + decalageCol;
-                    if (colCible >= cols.length) return;
-                    points[cible][cols[colCible]] = parseFloat(valeur.trim().replace(',', '.')) || 0;
-                });
-            });
-
-            donneesModifiees = true;
-            afficherTableauPointsSurface();
-        }
-
-        // --- COLLAGE TYPE "TABLEUR" DIRECTEMENT DANS LES CELLULES (Ctrl+V depuis Excel) ---
-        function creerLigneVide(type) {
-            return type === 'tirants'
-                ? { nom: "Nouveau", groupe: "A", x: centreX || 0, y: centreY || 0, z: centreZ || 0, L: 15, theta: 90, incl: 15, diametre: 0.3 }
-                : { nom: "Nouveau Pieu", groupe: "A", x: centreX || 0, y: centreY || 0, zTete: 167, zBase: 155, diametre: 1.0 };
-        }
-
         function affecterValeurCellule(ligne, champ, valeurBrute) {
-            const valeur = valeurBrute.trim();
-            if (champ === 'nom') {
-                ligne.nom = valeur;
-            } else if (champ === 'groupe') {
-                const v = valeur.toLowerCase();
-                const nomA = document.getElementById('nom-groupe-a').value.toLowerCase();
-                const nomB = document.getElementById('nom-groupe-b').value.toLowerCase();
-                if (v === 'b' || v === nomB) ligne.groupe = 'B';
-                else if (v === 'a' || v === nomA) ligne.groupe = 'A';
-                else ligne.groupe = valeur.toUpperCase().includes('B') ? 'B' : 'A';
+            if (valeurBrute === undefined || valeurBrute === null) return;
+            const valeur = String(valeurBrute).trim();
+            if (champ === 'nom' || champ === 'groupe') {
+                ligne[champ] = valeur;
             } else {
-                ligne[champ] = parseFloat(valeur.replace(',', '.')) || 0;
+                ligne[champ] = parseFloatSafe(valeur);
             }
+        }
+
+        function purgerToutLeProjet() {
+            montrerMessage("⚠️ Êtes-vous sûr de vouloir vider absolument TOUT le projet (Tirants, Pieux et Surfaces) ?\nCette action est irréversible.", true, (conf) => {
+                if (conf) {
+                    donnees_tirants = [];
+                    donnees_pieux = [];
+                    donnees_surfaces = [];
+                    donneesModifiees = true;
+                    if (!document.getElementById('modal-gestionnaire').classList.contains('hidden')) {
+                        afficherTableauDonnees();
+                        afficherTableauPieux();
+                        afficherTableauSurfaces();
+                    }
+                    rafraichirApplication();
+                }
+            });
         }
 
         function gererCollage(event, type, ligneIndex, champ) {
@@ -986,16 +683,21 @@
             const texte = (event.clipboardData || window.clipboardData).getData('text');
             if (!texte) return;
 
-            const lignesCollees = texte.split(/\r\n|\n|\r/).filter(l => l.length > 0).map(l => l.split('\t'));
-            if (lignesCollees.length === 0) return;
-
+            // Filtre strict pour ignorer les retours à la ligne vides générés par Excel
+            const lignesCollees = texte.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0).map(l => l.split('\t'));
             const cols = type === 'tirants' ? colsTirants : colsPieux;
             const donnees = type === 'tirants' ? donnees_tirants : donnees_pieux;
             const colDepart = cols.indexOf(champ);
 
             lignesCollees.forEach((valeurs, decalageLigne) => {
                 const cible = ligneIndex + decalageLigne;
-                while (donnees.length <= cible) donnees.push(creerLigneVide(type));
+                const nomA = document.getElementById('nom-groupe-a').value;
+                while (donnees.length <= cible) {
+                    donnees.push(type === 'tirants' 
+                        ? { nom: "Nouveau", groupe: nomA, x: centreX||0, y: centreY||0, z: centreZ||0, L: 15, theta: 90, incl: 15, diametre: 0.3, selected: false }
+                        : { nom: "Nouveau Pieu", groupe: nomA, x: centreX||0, y: centreY||0, zTete: 167, zBase: 155, diametre: 1.0, selected: false }
+                    );
+                }
                 valeurs.forEach((valeur, decalageCol) => {
                     const colCible = colDepart + decalageCol;
                     if (colCible >= cols.length) return;
@@ -1007,81 +709,133 @@
             if (type === 'tirants') afficherTableauDonnees(); else afficherTableauPieux();
         }
 
+        function gererCollageSurface(event, ligneIndex, champ) {
+            event.preventDefault();
+            const texte = (event.clipboardData || window.clipboardData).getData('text');
+            if (!texte) return;
+            const lignesCollees = texte.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0).map(l => l.split('\t'));
+            const colDepart = colsSurfaces.indexOf(champ);
+            lignesCollees.forEach((valeurs, decalageLigne) => {
+                const cible = ligneIndex + decalageLigne;
+                if (cible >= donnees_surfaces.length) return;
+                valeurs.forEach((valeur, decalageCol) => {
+                    const colCible = colDepart + decalageCol;
+                    if (colCible >= colsSurfaces.length) return;
+                    affecterValeurCellule(donnees_surfaces[cible], colsSurfaces[colCible], valeur);
+                });
+            });
+            donneesModifiees = true; afficherTableauSurfaces();
+        }
+
+        function majTirant(index, champ, valeur) { affecterValeurCellule(donnees_tirants[index], champ, valeur); donneesModifiees = true; if (champ === 'groupe') afficherTableauDonnees(); }
+        function majPieu(index, champ, valeur) { affecterValeurCellule(donnees_pieux[index], champ, valeur); donneesModifiees = true; if (champ === 'groupe') afficherTableauPieux(); }
+        function majSurface(index, champ, valeur) { if(champ === 'couleur') donnees_surfaces[index].couleur = parseInt(valeur.replace('#', ''), 16); else affecterValeurCellule(donnees_surfaces[index], champ, valeur); donneesModifiees = true; if (champ === 'groupe') afficherTableauSurfaces(); }
+
+        function supprimerTirant(index) { montrerMessage("Supprimer ce tirant ?", true, (c) => { if (c) { donnees_tirants.splice(index, 1); afficherTableauDonnees(); donneesModifiees = true; }}); }
+        function supprimerPieu(index) { montrerMessage("Supprimer ce pieu ?", true, (c) => { if (c) { donnees_pieux.splice(index, 1); afficherTableauPieux(); donneesModifiees = true; }}); }
+        function supprimerSurface(index) { montrerMessage("Supprimer cette surface ?", true, (c) => { if (c) { donnees_surfaces.splice(index, 1); afficherTableauSurfaces(); donneesModifiees = true; }}); }
+
+        function ajouterLigneTirant() { const nomA = document.getElementById('nom-groupe-a').value; donnees_tirants.unshift({ nom: "Nouveau", groupe: nomA, x: centreX||0, y: centreY||0, z: centreZ||0, L: 15, theta: 90, incl: 15, diametre: 0.3, selected: false }); afficherTableauDonnees(); donneesModifiees = true; }
+        function ajouterLignePieu() { const nomA = document.getElementById('nom-groupe-a').value; donnees_pieux.unshift({ nom: "Nouveau Pieu", groupe: nomA, x: centreX||0, y: centreY||0, zTete: 167, zBase: 155, diametre: 1.0, selected: false }); afficherTableauPieux(); donneesModifiees = true; }
+        function ajouterSurface() { const nomA = document.getElementById('nom-groupe-a').value; donnees_surfaces.unshift({ nom: "Nouvelle", groupe: nomA, visible: true, couleur: 0x94a3b8, opacite: 0.85, epaisseur: 0, points: [], selected: false }); afficherTableauSurfaces(); donneesModifiees = true; }
+
+        function purgerTirants() { montrerMessage("Effacer tous les tirants ?", true, (c) => { if(c){ donnees_tirants = []; afficherTableauDonnees(); donneesModifiees = true; }}); }
+        function purgerPieux() { montrerMessage("Effacer tous les pieux ?", true, (c) => { if(c){ donnees_pieux = []; afficherTableauPieux(); donneesModifiees = true; }}); }
+        function purgerSurfaces() { montrerMessage("Effacer toutes les surfaces ?", true, (c) => { if(c){ donnees_surfaces = []; afficherTableauSurfaces(); donneesModifiees = true; }}); }
+
+        function majSurfaceVisibilite(index, visible) { donnees_surfaces[index].visible = visible; donneesModifiees = true; }
+
+        // --- Édition points surfaces ---
+        function ouvrirEditeurPoints(index) { indexSurfaceEnEdition = index; document.getElementById('modal-points-nom-surface').innerText = donnees_surfaces[index].nom; afficherTableauPointsSurface(); document.getElementById('modal-points-surface').classList.remove('hidden'); }
+        function fermerEditeurPoints() { document.getElementById('modal-points-surface').classList.add('hidden'); indexSurfaceEnEdition = null; afficherTableauSurfaces(); }
+        function afficherTableauPointsSurface() {
+            const tbody = document.getElementById('table-points-surface-body'); tbody.innerHTML = '';
+            donnees_surfaces[indexSurfaceEnEdition].points.forEach((pt, i) => {
+                tbody.innerHTML += `<tr>
+                    <td><input type="text" value="${pt.x}" onchange="majPointSurface(${i}, 'x', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                    <td><input type="text" value="${pt.y}" onchange="majPointSurface(${i}, 'y', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                    <td><input type="text" value="${pt.z}" onchange="majPointSurface(${i}, 'z', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'z')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                    <td class="text-center py-1"><button onclick="supprimerPointSurface(${i})" class="text-red-400 hover:text-red-300 font-bold">X</button></td>
+                </tr>`;
+            });
+        }
+        function majPointSurface(index, champ, valeur) { donnees_surfaces[indexSurfaceEnEdition].points[index][champ] = parseFloatSafe(valeur); donneesModifiees = true; }
+        function ajouterPointSurface() { donnees_surfaces[indexSurfaceEnEdition].points.push({ x: centreX||0, y: centreY||0, z: centreZ||0 }); afficherTableauPointsSurface(); donneesModifiees = true; }
+        function supprimerPointSurface(index) { donnees_surfaces[indexSurfaceEnEdition].points.splice(index, 1); afficherTableauPointsSurface(); donneesModifiees = true; }
+        function gererCollagePointSurface(event, ligneIndex, champ) {
+            event.preventDefault(); const texte = (event.clipboardData || window.clipboardData).getData('text'); if (!texte) return;
+            const lignesCollees = texte.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0).map(l => l.split('\t'));
+            const cols = ['x', 'y', 'z'], points = donnees_surfaces[indexSurfaceEnEdition].points, colDepart = cols.indexOf(champ);
+            lignesCollees.forEach((valeurs, decalageLigne) => {
+                const cible = ligneIndex + decalageLigne; while (points.length <= cible) points.push({ x: 0, y: 0, z: 0 });
+                valeurs.forEach((valeur, decalageCol) => {
+                    const colCible = colDepart + decalageCol; if (colCible >= cols.length) return;
+                    points[cible][cols[colCible]] = parseFloatSafe(valeur);
+                });
+            });
+            donneesModifiees = true; afficherTableauPointsSurface();
+        }
+
+        document.getElementById('alert-threshold').addEventListener('change', (e) => { config.alerteDistance = parseFloat(e.target.value); rafraichirApplication(); });
+        function toggleAffichageNoms() { config.afficherNoms = document.getElementById('toggle-noms').checked; document.getElementById('labels-container').style.display = config.afficherNoms ? 'block' : 'none'; sauvegarderLocal(); }
+        function switchTab(tab) {
+            const styleActif = 'px-4 py-1.5 rounded text-sm bg-blue-600 text-white font-semibold transition-colors';
+            const styleInactif = 'px-4 py-1.5 rounded text-sm text-slate-400 hover:text-white transition-colors';
+            ['tirants', 'pieux', 'surfaces'].forEach(t => { document.getElementById('view-' + t).classList.toggle('hidden', tab !== t); document.getElementById('tab-btn-' + t).className = tab === t ? styleActif : styleInactif; });
+        }
+        
+        function ouvrirGestionnaire() { donneesModifiees = false; afficherTableauDonnees(); afficherTableauPieux(); afficherTableauSurfaces(); document.getElementById('modal-gestionnaire').classList.remove('hidden'); }
+        function fermerGestionnaire() { document.getElementById('modal-gestionnaire').classList.add('hidden'); if (donneesModifiees) { rafraichirApplication(); } }
+
         function rafraichirApplication() {
             preparerDonnees();
-            Object.values(meshes3D).forEach(mesh => scene.remove(mesh));
-            meshes3D = {};
-            Object.values(meshesSurfaces).forEach(mesh => scene.remove(mesh));
-            meshesSurfaces = {};
-            document.getElementById('labels-container').innerHTML = '';
-            labelsList = [];
-
-            const clashs = calculerClashs();
-            dessinerTirants(clashs);
-            dessinerPieux();
-            dessinerSurfaces();
+            Object.values(meshes3D).forEach(mesh => scene.remove(mesh)); meshes3D = {};
+            Object.values(meshesSurfaces).forEach(mesh => scene.remove(mesh)); meshesSurfaces = {};
+            document.getElementById('labels-container').innerHTML = ''; labelsList = [];
+            dessinerTirants(calculerClashs()); dessinerPieux(); dessinerSurfaces();
             sauvegarderLocal();
         }
 
         function sauvegarderLocal() {
-            const appState = {
-                tirants: donnees_tirants,
-                pieux: donnees_pieux,
-                surfaces: donnees_surfaces,
-                config: config,
-                nomGroupeA: document.getElementById('nom-groupe-a').value,
-                nomGroupeB: document.getElementById('nom-groupe-b').value
-            };
-            localStorage.setItem('geoVisual3dData', JSON.stringify(appState));
+            localStorage.setItem('geoVisual3dData', JSON.stringify({
+                tirants: donnees_tirants, pieux: donnees_pieux, surfaces: donnees_surfaces, config: config,
+                nomGroupeA: document.getElementById('nom-groupe-a').value, nomGroupeB: document.getElementById('nom-groupe-b').value
+            }));
             const indicator = document.getElementById('save-indicator');
             if(indicator) { indicator.style.opacity = '1'; setTimeout(() => indicator.style.opacity = '0', 2000); }
         }
 
         function chargerLocal() {
-            // Reprend automatiquement les données de l'ancienne version (GeoClash 3D) si présentes
-            const ancienneSauvegarde = localStorage.getItem('geoClashData');
-            const saved = localStorage.getItem('geoVisual3dData') || ancienneSauvegarde;
+            const saved = localStorage.getItem('geoVisual3dData') || localStorage.getItem('geoClashData');
             if (saved) {
                 try {
                     const data = JSON.parse(saved);
                     if(data.tirants) donnees_tirants = data.tirants;
                     if(data.pieux) donnees_pieux = data.pieux;
                     if(data.surfaces) donnees_surfaces = data.surfaces;
-                    if (data.config) {
-                        config.alerteDistance = data.config.alerteDistance || 1.0;
-                        config.afficherNoms = data.config.afficherNoms !== false;
-                    }
-                    if (data.nomGroupeA) document.getElementById('nom-groupe-a').value = data.nomGroupeA;
-                    if (data.nomGroupeB) document.getElementById('nom-groupe-b').value = data.nomGroupeB;
-
+                    if(data.config) { config.alerteDistance = data.config.alerteDistance || 1.0; config.afficherNoms = data.config.afficherNoms !== false; }
+                    if(data.nomGroupeA) document.getElementById('nom-groupe-a').value = data.nomGroupeA;
+                    if(data.nomGroupeB) document.getElementById('nom-groupe-b').value = data.nomGroupeB;
+                    
                     document.getElementById('alert-threshold').value = config.alerteDistance;
                     document.getElementById('toggle-noms').checked = config.afficherNoms;
                     document.getElementById('labels-container').style.display = config.afficherNoms ? 'block' : 'none';
                 } catch (e) {}
             }
-            if (ancienneSauvegarde) localStorage.removeItem('geoClashData');
+            if (localStorage.getItem('geoClashData')) localStorage.removeItem('geoClashData');
         }
 
         function reinitialiserDonneesLocales() {
             montrerMessage("Effacer vos données locales et restaurer l'exemple par défaut ?", true, (conf) => {
-                if(conf) {
-                    localStorage.removeItem('geoVisual3dData');
-                    location.reload();
-                }
+                if(conf) { localStorage.removeItem('geoVisual3dData'); location.reload(); }
             });
         }
 
         window.onload = () => {
-            chargerLocal();
-            preparerDonnees();
-            init3D();
-            const clashsInitiaux = calculerClashs();
-            dessinerTirants(clashsInitiaux);
-            dessinerPieux();
-            dessinerSurfaces();
+            chargerLocal(); preparerDonnees(); init3D();
+            dessinerTirants(calculerClashs()); dessinerPieux(); dessinerSurfaces();
             animate();
         };
-
     </script>
 </body>
 </html>
