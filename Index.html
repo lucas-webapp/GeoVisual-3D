@@ -56,10 +56,6 @@
                         <input type="number" id="alert-threshold" value="1.0" step="0.1" class="bg-slate-900 border border-slate-600 text-white rounded px-2 py-1 w-20 text-right focus:border-blue-500 outline-none">
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-slate-300 text-xs font-semibold">Rayon barres (m):</span>
-                        <input type="number" id="rayon-tirant" value="0.15" step="0.05" class="bg-slate-900 border border-slate-600 text-white rounded px-2 py-1 w-20 text-right focus:border-blue-500 outline-none">
-                    </div>
-                    <div class="flex items-center justify-between">
                         <span class="text-slate-300 text-xs font-semibold">Afficher les noms :</span>
                         <input type="checkbox" id="toggle-noms" checked onchange="toggleAffichageNoms()" class="w-4 h-4 accent-blue-500 cursor-pointer">
                     </div>
@@ -119,7 +115,7 @@
                             <tr>
                                 <th class="px-2 py-2">Groupe</th><th class="px-2 py-2">Nom</th><th class="px-2 py-2">X</th>
                                 <th class="px-2 py-2">Y</th><th class="px-2 py-2">Z</th><th class="px-2 py-2">L (m)</th>
-                                <th class="px-2 py-2">Azimut (°)</th><th class="px-2 py-2">Incl. (°)</th><th class="px-2 py-2 text-center">Actions</th>
+                                <th class="px-2 py-2">Azimut (°)</th><th class="px-2 py-2">Incl. (°)</th><th class="px-2 py-2">Diamètre (m)</th><th class="px-2 py-2 text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="table-tirants-body" class="divide-y divide-slate-700/50"></tbody>
@@ -172,12 +168,12 @@
     <script>
         // DONNÉES PAR DÉFAUT
         let donnees_tirants = [
-            {"nom": "T160", "x": 296870.2837, "y": 228309.4547, "z": 166.6, "L": 21.0, "theta": 270.0, "incl": 32.0, "groupe": "A"},
-            {"nom": "T161", "x": 296864.8437, "y": 228309.4487, "z": 166.6, "L": 21.0, "theta": 270.0, "incl": 30.0, "groupe": "A"},
-            {"nom": "T257", "x": 296870.2837, "y": 228309.4547, "z": 160.0, "L": 19.0, "theta": 270.0, "incl": 30.0, "groupe": "A"},
-            {"nom": "C10a", "x": 296875.945, "y": 228292.3271, "z": 166.5, "L": 12.0, "theta": 180.0, "incl": 20.0, "groupe": "B"},
-            {"nom": "C12a", "x": 296875.945, "y": 228295.4215, "z": 166.5, "L": 12.0, "theta": 180.0, "incl": 20.0, "groupe": "B"},
-            {"nom": "C01a", "x": 296862.245, "y": 228287.7545, "z": 166.5, "L": 13.0, "theta": 90.0, "incl": 30.0, "groupe": "B"}
+            {"nom": "T160", "x": 296870.2837, "y": 228309.4547, "z": 166.6, "L": 21.0, "theta": 270.0, "incl": 32.0, "groupe": "A", "diametre": 0.3},
+            {"nom": "T161", "x": 296864.8437, "y": 228309.4487, "z": 166.6, "L": 21.0, "theta": 270.0, "incl": 30.0, "groupe": "A", "diametre": 0.3},
+            {"nom": "T257", "x": 296870.2837, "y": 228309.4547, "z": 160.0, "L": 19.0, "theta": 270.0, "incl": 30.0, "groupe": "A", "diametre": 0.3},
+            {"nom": "C10a", "x": 296875.945, "y": 228292.3271, "z": 166.5, "L": 12.0, "theta": 180.0, "incl": 20.0, "groupe": "B", "diametre": 0.3},
+            {"nom": "C12a", "x": 296875.945, "y": 228295.4215, "z": 166.5, "L": 12.0, "theta": 180.0, "incl": 20.0, "groupe": "B", "diametre": 0.3},
+            {"nom": "C01a", "x": 296862.245, "y": 228287.7545, "z": 166.5, "L": 13.0, "theta": 90.0, "incl": 30.0, "groupe": "B", "diametre": 0.3}
         ];
 
         let donnees_pieux = [
@@ -196,11 +192,10 @@
         let callbackModalCustom = null;
 
         // Ordre des colonnes du tableau, utilisé pour le collage type "tableur"
-        const colsTirants = ['groupe', 'nom', 'x', 'y', 'z', 'L', 'theta', 'incl'];
+        const colsTirants = ['groupe', 'nom', 'x', 'y', 'z', 'L', 'theta', 'incl', 'diametre'];
         const colsPieux = ['nom', 'x', 'y', 'zTete', 'zBase', 'diametre'];
 
         const config = {
-            rayonTirant: 0.15,
             alerteDistance: 1.0,
             afficherNoms: true,
             couleurOuvrageT: 0x3b82f6,
@@ -294,6 +289,7 @@
                 t.zFin = t.z - t.L * Math.sin(inclRad);
                 
                 if(!t.groupe) t.groupe = t.nom.toUpperCase().startsWith("T") ? "A" : "B";
+                if(!t.diametre) t.diametre = 0.3;
                 t.isNotreOuvrage = (t.groupe === "A");
             });
 
@@ -371,7 +367,8 @@
                 const direction = new THREE.Vector3().subVectors(t.p1, t.p0);
                 const longueur = direction.length();
                 
-                const geometry = new THREE.CylinderGeometry(config.rayonTirant, config.rayonTirant, longueur, cylinderRadialSegments);
+                const rayon = t.diametre / 2.0;
+                const geometry = new THREE.CylinderGeometry(rayon, rayon, longueur, cylinderRadialSegments);
                 const axis = new THREE.Vector3(0, 1, 0);
                 direction.normalize();
                 
@@ -465,11 +462,6 @@
             rafraichirApplication();
         });
 
-        document.getElementById('rayon-tirant').addEventListener('change', (e) => {
-            config.rayonTirant = parseFloat(e.target.value);
-            rafraichirApplication();
-        });
-
         function toggleAffichageNoms() {
             const affiche = document.getElementById('toggle-noms').checked;
             config.afficherNoms = affiche;
@@ -507,12 +499,11 @@
             tbody.innerHTML = '';
             donnees_tirants.forEach((t, i) => {
                 if(!t.groupe) t.groupe = "A";
+                if(!t.diametre) t.diametre = 0.3;
+                const bordureGroupe = t.groupe === 'A' ? 'border-blue-500' : 'border-teal-500';
                 tbody.innerHTML += `
                     <tr class="hover:bg-slate-800/50">
-                        <td class="p-1"><select onchange="majTirant(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'groupe')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white text-xs">
-                            <option value="A" ${t.groupe === 'A' ? 'selected' : ''}>${document.getElementById('nom-groupe-a').value}</option>
-                            <option value="B" ${t.groupe === 'B' ? 'selected' : ''}>${document.getElementById('nom-groupe-b').value}</option>
-                        </select></td>
+                        <td class="p-1"><input type="text" value="${t.groupe}" title="${t.groupe === 'A' ? document.getElementById('nom-groupe-a').value : document.getElementById('nom-groupe-b').value}" onchange="majTirant(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'groupe')" class="w-12 text-center uppercase bg-slate-900 border-2 ${bordureGroupe} rounded p-1 text-white"></td>
                         <td class="p-1"><input type="text" value="${t.nom}" onchange="majTirant(${i}, 'nom', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'nom')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
                         <td class="p-1"><input type="number" step="any" value="${t.x}" onchange="majTirant(${i}, 'x', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'x')" class="w-20 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
                         <td class="p-1"><input type="number" step="any" value="${t.y}" onchange="majTirant(${i}, 'y', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'y')" class="w-20 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
@@ -520,6 +511,7 @@
                         <td class="p-1"><input type="number" step="any" value="${t.L}" onchange="majTirant(${i}, 'L', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'L')" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
                         <td class="p-1"><input type="number" step="any" value="${t.theta}" onchange="majTirant(${i}, 'theta', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'theta')" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
                         <td class="p-1"><input type="number" step="any" value="${t.incl}" onchange="majTirant(${i}, 'incl', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'incl')" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${t.diametre}" onchange="majTirant(${i}, 'diametre', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'diametre')" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
                         <td class="p-1 text-center"><button onclick="supprimerTirant(${i})" class="text-red-400 p-1 font-bold">X</button></td>
                     </tr>
                 `;
@@ -527,9 +519,9 @@
         }
 
         function majTirant(index, champ, valeur) {
-            if (champ === 'nom' || champ === 'groupe') donnees_tirants[index][champ] = valeur;
-            else donnees_tirants[index][champ] = parseFloat(valeur) || 0;
+            affecterValeurCellule(donnees_tirants[index], champ, valeur);
             donneesModifiees = true;
+            if (champ === 'groupe') afficherTableauDonnees();
         }
 
         function supprimerTirant(index) {
@@ -568,8 +560,7 @@
         }
 
         function majPieu(index, champ, valeur) {
-            if (champ === 'nom') donnees_pieux[index][champ] = valeur;
-            else donnees_pieux[index][champ] = parseFloat(valeur) || 0;
+            affecterValeurCellule(donnees_pieux[index], champ, valeur);
             donneesModifiees = true;
         }
 
@@ -593,7 +584,7 @@
         // --- COLLAGE TYPE "TABLEUR" DIRECTEMENT DANS LES CELLULES (Ctrl+V depuis Excel) ---
         function creerLigneVide(type) {
             return type === 'tirants'
-                ? { nom: "Nouveau", groupe: "A", x: centreX || 0, y: centreY || 0, z: centreZ || 0, L: 15, theta: 90, incl: 15 }
+                ? { nom: "Nouveau", groupe: "A", x: centreX || 0, y: centreY || 0, z: centreZ || 0, L: 15, theta: 90, incl: 15, diametre: 0.3 }
                 : { nom: "Nouveau Pieu", x: centreX || 0, y: centreY || 0, zTete: 167, zBase: 155, diametre: 1.0 };
         }
 
@@ -675,7 +666,6 @@
                     if(data.tirants) donnees_tirants = data.tirants;
                     if(data.pieux) donnees_pieux = data.pieux;
                     if (data.config) {
-                        config.rayonTirant = data.config.rayonTirant || 0.15;
                         config.alerteDistance = data.config.alerteDistance || 1.0;
                         config.afficherNoms = data.config.afficherNoms !== false;
                     }
@@ -683,7 +673,6 @@
                     if (data.nomGroupeB) document.getElementById('nom-groupe-b').value = data.nomGroupeB;
 
                     document.getElementById('alert-threshold').value = config.alerteDistance;
-                    document.getElementById('rayon-tirant').value = config.rayonTirant;
                     document.getElementById('toggle-noms').checked = config.afficherNoms;
                     document.getElementById('labels-container').style.display = config.afficherNoms ? 'block' : 'none';
                 } catch (e) {}
