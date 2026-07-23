@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoVisual 3D - Gestion des Tirants et Pieux</title>
+
+    <!-- Tailwind CSS pour le style de l'interface -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Three.js pour la 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls pour tourner autour de la scène -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+        
+        /* Labels 3D qui flottent au-dessus de la scène */
+        .anchor-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+
+        /* Scrollbar custom */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="text-sm">
+
+    <div id="canvas-container"></div>
+    <div id="labels-container" style="position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 5; pointer-events: none;"></div>
+
+    <div id="ui-layer">
+        <!-- Outils et Paramètres (Flottant à gauche) -->
+        <div class="absolute top-4 left-4 pointer-events-auto flex flex-col gap-2 w-80">
+            <div class="bg-slate-800/95 backdrop-blur border border-slate-600 rounded p-4 shadow-2xl">
+                <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-300">GeoVisual 3D</h1>
+                <p class="text-slate-400 text-xs mt-1 mb-4">Analyse de Tirants & Pieux</p>
+
+                <div class="space-y-3 border-t border-slate-700 pt-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-300 text-xs font-semibold">Seuil d'alerte (m):</span>
+                        <input type="number" id="alert-threshold" value="1.0" step="0.1" class="bg-slate-900 border border-slate-600 text-white rounded px-2 py-1 w-20 text-right focus:border-blue-500 outline-none">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-300 text-xs font-semibold">Rayon barres (m):</span>
+                        <input type="number" id="rayon-tirant" value="0.15" step="0.05" class="bg-slate-900 border border-slate-600 text-white rounded px-2 py-1 w-20 text-right focus:border-blue-500 outline-none">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-300 text-xs font-semibold">Afficher les noms :</span>
+                        <input type="checkbox" id="toggle-noms" checked onchange="toggleAffichageNoms()" class="w-4 h-4 accent-blue-500 cursor-pointer">
+                    </div>
+                </div>
+
+                <div class="space-y-2 border-t border-slate-700 pt-3 mt-3">
+                    <div class="text-slate-400 font-semibold mb-1 uppercase tracking-wider text-[10px]">Groupes (Éditables)</div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 bg-blue-500 rounded-full"></div> 
+                        <input type="text" id="nom-groupe-a" value="Notre Ouvrage (T)" class="bg-transparent border-b border-transparent hover:border-slate-500 focus:border-blue-500 outline-none text-white w-full transition-colors text-xs" onchange="rafraichirApplication()">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 bg-teal-500 rounded-full"></div> 
+                        <input type="text" id="nom-groupe-b" value="Ouvrage Voisin (C)" class="bg-transparent border-b border-transparent hover:border-slate-500 focus:border-teal-500 outline-none text-white w-full transition-colors text-xs" onchange="rafraichirApplication()">
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-700">
+                    <button onclick="ouvrirGestionnaire()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded shadow transition-colors flex justify-center items-center gap-2 font-semibold">
+                        Ouvrir Base de Données
+                    </button>
+                    <div class="mt-2 flex justify-between items-center">
+                        <button onclick="reinitialiserDonneesLocales()" class="text-[10px] text-slate-400 hover:text-red-400 underline transition-colors">Réinitialiser l'application</button>
+                        <span id="save-indicator" class="text-[10px] text-emerald-400 opacity-0 transition-opacity duration-300">✓ Sauvegardé</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PRINCIPAL GESTIONNAIRE DE DONNÉES -->
+    <div id="modal-gestionnaire" class="hidden pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm">
+        <div class="bg-slate-900 border border-slate-600 rounded-lg shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col m-4">
+            
+            <div class="flex justify-between items-center p-4 border-b border-slate-700 bg-slate-800/80">
+                <div class="flex gap-2">
+                    <button id="tab-btn-tirants" onclick="switchTab('tirants')" class="px-4 py-1.5 rounded text-sm bg-blue-600 text-white font-semibold transition-colors">Tirants</button>
+                    <button id="tab-btn-pieux" onclick="switchTab('pieux')" class="px-4 py-1.5 rounded text-sm text-slate-400 hover:text-white transition-colors">Pieux</button>
+                </div>
+                <button onclick="fermerGestionnaire()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+
+            <!-- VUE TIRANTS -->
+            <div id="view-tirants" class="flex-1 flex flex-col overflow-hidden">
+                <div class="p-3 flex flex-wrap gap-3 border-b border-slate-800 bg-slate-800/40 items-center justify-between">
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <button onclick="ajouterLigneTirant()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs shadow transition-colors font-semibold">
+                            + Nouveau Tirant
+                        </button>
+                        <span class="text-slate-400 text-[10px] italic">💡 Astuce : cliquez dans une cellule puis collez (Ctrl+V) directement vos données Excel.</span>
+                    </div>
+                    <button onclick="purgerTirants()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer Tirants</button>
+                </div>
+                <div class="flex-1 overflow-auto p-2 custom-scrollbar">
+                    <table class="w-full text-left text-sm text-slate-300">
+                        <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
+                            <tr>
+                                <th class="px-2 py-2">Groupe</th><th class="px-2 py-2">Nom</th><th class="px-2 py-2">X</th>
+                                <th class="px-2 py-2">Y</th><th class="px-2 py-2">Z</th><th class="px-2 py-2">L (m)</th>
+                                <th class="px-2 py-2">Azimut (°)</th><th class="px-2 py-2">Incl. (°)</th><th class="px-2 py-2 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-tirants-body" class="divide-y divide-slate-700/50"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- VUE PIEUX -->
+            <div id="view-pieux" class="flex-1 flex flex-col overflow-hidden hidden">
+                <div class="p-3 flex flex-wrap gap-3 border-b border-slate-800 bg-slate-800/40 items-center justify-between">
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <button onclick="ajouterLignePieu()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs shadow transition-colors font-semibold">
+                            + Nouveau Pieu
+                        </button>
+                        <span class="text-slate-400 text-[10px] italic">💡 Astuce : cliquez dans une cellule puis collez (Ctrl+V) directement vos données Excel.</span>
+                    </div>
+                    <button onclick="purgerPieux()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer Pieux</button>
+                </div>
+                <div class="flex-1 overflow-auto p-2 custom-scrollbar">
+                    <table class="w-full text-left text-sm text-slate-300">
+                        <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
+                            <tr>
+                                <th class="px-2 py-2">Nom</th><th class="px-2 py-2">X</th><th class="px-2 py-2">Y</th>
+                                <th class="px-2 py-2">Z Tête</th><th class="px-2 py-2">Z Base</th><th class="px-2 py-2">Diamètre (m)</th>
+                                <th class="px-2 py-2 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-pieux-body" class="divide-y divide-slate-700/50"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-slate-700 bg-slate-800/80 flex justify-end">
+                <button onclick="fermerGestionnaire()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded shadow font-bold transition-colors">Appliquer et Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE DE MESSAGE PERSONNALISÉE (Z-INDEX TRÈS ÉLEVÉ) -->
+    <div id="custom-modal" class="hidden pointer-events-auto fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-500 rounded-lg shadow-2xl w-full max-w-md p-6 text-center m-4">
+            <p id="custom-modal-message" class="text-sm text-slate-200 mb-6 whitespace-pre-line"></p>
+            <div id="custom-modal-actions" class="flex justify-center gap-3">
+                <button id="custom-modal-ok" onclick="fermerModalCustom(true)" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded text-xs font-bold transition-colors">OK</button>
+                <button id="custom-modal-cancel" onclick="fermerModalCustom(false)" class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded text-xs font-semibold transition-colors hidden">Annuler</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DONNÉES PAR DÉFAUT
+        let donnees_tirants = [
+            {"nom": "T160", "x": 296870.2837, "y": 228309.4547, "z": 166.6, "L": 21.0, "theta": 270.0, "incl": 32.0, "groupe": "A"},
+            {"nom": "T161", "x": 296864.8437, "y": 228309.4487, "z": 166.6, "L": 21.0, "theta": 270.0, "incl": 30.0, "groupe": "A"},
+            {"nom": "T257", "x": 296870.2837, "y": 228309.4547, "z": 160.0, "L": 19.0, "theta": 270.0, "incl": 30.0, "groupe": "A"},
+            {"nom": "C10a", "x": 296875.945, "y": 228292.3271, "z": 166.5, "L": 12.0, "theta": 180.0, "incl": 20.0, "groupe": "B"},
+            {"nom": "C12a", "x": 296875.945, "y": 228295.4215, "z": 166.5, "L": 12.0, "theta": 180.0, "incl": 20.0, "groupe": "B"},
+            {"nom": "C01a", "x": 296862.245, "y": 228287.7545, "z": 166.5, "L": 13.0, "theta": 90.0, "incl": 30.0, "groupe": "B"}
+        ];
+
+        let donnees_pieux = [
+            {"nom": "P1", "x": 296875.945, "y": 228292.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2},
+            {"nom": "P2", "x": 296875.945, "y": 228295.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2},
+            {"nom": "P3", "x": 296875.945, "y": 228298.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2},
+            {"nom": "P4", "x": 296865.000, "y": 228287.0, "zTete": 167.0, "zBase": 155.0, "diametre": 1.2}
+        ];
+
+        let scene, camera, renderer, controls;
+        let labelsList = [];
+        let meshes3D = {}; 
+
+        let centreX = 0, centreY = 0, centreZ = 0;
+        let donneesModifiees = false;
+        let callbackModalCustom = null;
+
+        // Ordre des colonnes du tableau, utilisé pour le collage type "tableur"
+        const colsTirants = ['groupe', 'nom', 'x', 'y', 'z', 'L', 'theta', 'incl'];
+        const colsPieux = ['nom', 'x', 'y', 'zTete', 'zBase', 'diametre'];
+
+        const config = {
+            rayonTirant: 0.15,
+            alerteDistance: 1.0,
+            afficherNoms: true,
+            couleurOuvrageT: 0x3b82f6,
+            couleurOuvrageC: 0x14b8a6,
+            couleurClash: 0xef4444,
+            couleurPieu: 0x94a3b8
+        };
+
+        function montrerMessage(message, avecAnnulation = false, callback = null) {
+            document.getElementById('custom-modal-message').innerText = message;
+            callbackModalCustom = callback;
+            const btnCancel = document.getElementById('custom-modal-cancel');
+            if (avecAnnulation) {
+                btnCancel.classList.remove('hidden');
+            } else {
+                btnCancel.classList.add('hidden');
+            }
+            document.getElementById('custom-modal').classList.remove('hidden');
+        }
+
+        function fermerModalCustom(reponse) {
+            document.getElementById('custom-modal').classList.add('hidden');
+            if (callbackModalCustom) {
+                let cb = callbackModalCustom;
+                callbackModalCustom = null;
+                cb(reponse);
+            }
+        }
+
+        const radians = (deg) => deg * Math.PI / 180.0;
+
+        function shortestDistanceBetweenSegments(p1, p2, p3, p4) {
+            const EPS = 1e-6;
+            let u = new THREE.Vector3().subVectors(p2, p1);
+            let v = new THREE.Vector3().subVectors(p4, p3);
+            let w = new THREE.Vector3().subVectors(p1, p3);
+
+            let a = u.dot(u);
+            let b = u.dot(v);
+            let c = v.dot(v);
+            let d = u.dot(w);
+            let e = v.dot(w);
+
+            let D = a*c - b*b;
+            let sc, sN, sD = D;
+            let tc, tN, tD = D;
+
+            if (D < EPS) {
+                sN = 0.0; sD = 1.0; tN = e; tD = c;
+            } else {
+                sN = (b*e - c*d);
+                tN = (a*e - b*d);
+                if (sN < 0.0) { sN = 0.0; tN = e; tD = c; }
+                else if (sN > sD) { sN = sD; tN = e + b; tD = c; }
+            }
+
+            if (tN < 0.0) {
+                tN = 0.0;
+                if (-d < 0.0) sN = 0.0;
+                else if (-d > a) sN = sD;
+                else { sN = -d; sD = a; }
+            } else if (tN > tD) {
+                tN = tD;
+                if ((-d + b) < 0.0) sN = 0;
+                else if ((-d + b) > a) sN = sD;
+                else { sN = (-d + b); sD = a; }
+            }
+
+            sc = (Math.abs(sN) < EPS ? 0.0 : sN / sD);
+            tc = (Math.abs(tN) < EPS ? 0.0 : tN / tD);
+
+            let dP = new THREE.Vector3()
+                .add(w)
+                .add(u.clone().multiplyScalar(sc))
+                .sub(v.clone().multiplyScalar(tc));
+
+            return dP.length();
+        }
+
+        function preparerDonnees() {
+            centreX = 0; centreY = 0; centreZ = 0;
+            let totalItems = donnees_tirants.length + donnees_pieux.length;
+            
+            if (totalItems === 0) return;
+
+            donnees_tirants.forEach(t => {
+                let thetaRad = radians(t.theta);
+                let inclRad = radians(t.incl);
+                t.xFin = t.x + t.L * Math.cos(inclRad) * Math.cos(thetaRad);
+                t.yFin = t.y + t.L * Math.cos(inclRad) * Math.sin(thetaRad);
+                t.zFin = t.z - t.L * Math.sin(inclRad);
+                
+                if(!t.groupe) t.groupe = t.nom.toUpperCase().startsWith("T") ? "A" : "B";
+                t.isNotreOuvrage = (t.groupe === "A");
+            });
+
+            donnees_tirants.forEach(t => { centreX += t.x; centreY += t.y; centreZ += t.z; });
+            donnees_pieux.forEach(p => { centreX += p.x; centreY += p.y; centreZ += p.zTete; });
+            
+            centreX /= totalItems;
+            centreY /= totalItems;
+            centreZ /= totalItems;
+
+            donnees_tirants.forEach(t => {
+                t.p0 = new THREE.Vector3(t.x - centreX, t.z - centreZ, -(t.y - centreY));
+                t.p1 = new THREE.Vector3(t.xFin - centreX, t.zFin - centreZ, -(t.yFin - centreY));
+            });
+
+            donnees_pieux.forEach(p => {
+                p.p0 = new THREE.Vector3(p.x - centreX, p.zTete - centreZ, -(p.y - centreY));
+                p.p1 = new THREE.Vector3(p.x - centreX, p.zBase - centreZ, -(p.y - centreY));
+            });
+        }
+
+        function calculerClashs() {
+            let interactions = [];
+            for (let i = 0; i < donnees_tirants.length; i++) {
+                for (let j = i + 1; j < donnees_tirants.length; j++) {
+                    let t1 = donnees_tirants[i];
+                    let t2 = donnees_tirants[j];
+
+                    if (t1.groupe !== t2.groupe) {
+                        let dist = shortestDistanceBetweenSegments(t1.p0, t1.p1, t2.p0, t2.p1);
+                        if (dist <= config.alerteDistance) {
+                            interactions.push({ nomT: t1.nom, nomC: t2.nom, distance: dist });
+                        }
+                    }
+                }
+            }
+            return interactions;
+        }
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            const gridHelper = new THREE.GridHelper(100, 100, 0x334155, 0x1e293b);
+            gridHelper.position.y = -15;
+            scene.add(gridHelper);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(20, 20, 40);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+        }
+
+        function dessinerTirants(clashs) {
+            const nomsEnClash = new Set();
+            clashs.forEach(c => { nomsEnClash.add(c.nomT); nomsEnClash.add(c.nomC); });
+
+            const cylinderRadialSegments = 8;
+
+            donnees_tirants.forEach(t => {
+                const direction = new THREE.Vector3().subVectors(t.p1, t.p0);
+                const longueur = direction.length();
+                
+                const geometry = new THREE.CylinderGeometry(config.rayonTirant, config.rayonTirant, longueur, cylinderRadialSegments);
+                const axis = new THREE.Vector3(0, 1, 0);
+                direction.normalize();
+                
+                const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction);
+                const midPoint = new THREE.Vector3().addVectors(t.p0, t.p1).multiplyScalar(0.5);
+
+                let colorHex = t.isNotreOuvrage ? config.couleurOuvrageT : config.couleurOuvrageC;
+                if (nomsEnClash.has(t.nom)) colorHex = config.couleurClash;
+
+                const material = new THREE.MeshPhongMaterial({ color: colorHex, shininess: 50 });
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                mesh.position.copy(midPoint);
+                mesh.quaternion.copy(quaternion);
+                
+                scene.add(mesh);
+                meshes3D[t.nom] = mesh;
+
+                creerLabel(t.nom, t.p0, colorHex);
+            });
+        }
+
+        function dessinerPieux() {
+            const cylinderRadialSegments = 16;
+
+            donnees_pieux.forEach(p => {
+                const direction = new THREE.Vector3().subVectors(p.p1, p.p0);
+                const longueur = direction.length();
+                const rayon = p.diametre / 2.0;
+                
+                const geometry = new THREE.CylinderGeometry(rayon, rayon, longueur, cylinderRadialSegments);
+                const axis = new THREE.Vector3(0, 1, 0);
+                direction.normalize();
+                
+                const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction);
+                const midPoint = new THREE.Vector3().addVectors(p.p0, p.p1).multiplyScalar(0.5);
+
+                const material = new THREE.MeshPhongMaterial({ color: config.couleurPieu, shininess: 10 });
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                mesh.position.copy(midPoint);
+                mesh.quaternion.copy(quaternion);
+                
+                scene.add(mesh);
+                meshes3D[p.nom] = mesh;
+
+                creerLabel(p.nom, p.p0, config.couleurPieu);
+            });
+        }
+
+        function creerLabel(texte, position, couleurHex) {
+            const div = document.createElement('div');
+            div.className = 'anchor-label';
+            div.innerText = texte;
+            div.style.borderBottom = `2px solid #${couleurHex.toString(16).padStart(6, '0')}`;
+            document.getElementById('labels-container').appendChild(div);
+            labelsList.push({ element: div, pos: position });
+        }
+
+        function mettreAJourLabels() {
+            labelsList.forEach(label => {
+                const vector = label.pos.clone();
+                vector.project(camera);
+                if (vector.z > 1) {
+                    label.element.style.display = 'none';
+                    return;
+                }
+                label.element.style.display = 'block';
+                const x = (vector.x * .5 + .5) * window.innerWidth;
+                const y = (vector.y * -.5 + .5) * window.innerHeight;
+                label.element.style.left = `${x}px`;
+                label.element.style.top = `${y}px`;
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            mettreAJourLabels();
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        document.getElementById('alert-threshold').addEventListener('change', (e) => {
+            config.alerteDistance = parseFloat(e.target.value);
+            rafraichirApplication();
+        });
+
+        document.getElementById('rayon-tirant').addEventListener('change', (e) => {
+            config.rayonTirant = parseFloat(e.target.value);
+            rafraichirApplication();
+        });
+
+        function toggleAffichageNoms() {
+            const affiche = document.getElementById('toggle-noms').checked;
+            config.afficherNoms = affiche;
+            document.getElementById('labels-container').style.display = affiche ? 'block' : 'none';
+            sauvegarderLocal();
+        }
+
+        function switchTab(tab) {
+            document.getElementById('view-tirants').classList.toggle('hidden', tab !== 'tirants');
+            document.getElementById('view-pieux').classList.toggle('hidden', tab !== 'pieux');
+            
+            document.getElementById('tab-btn-tirants').className = tab === 'tirants' 
+                ? 'px-4 py-1.5 rounded text-sm bg-blue-600 text-white font-semibold transition-colors' 
+                : 'px-4 py-1.5 rounded text-sm text-slate-400 hover:text-white transition-colors';
+                
+            document.getElementById('tab-btn-pieux').className = tab === 'pieux' 
+                ? 'px-4 py-1.5 rounded text-sm bg-blue-600 text-white font-semibold transition-colors' 
+                : 'px-4 py-1.5 rounded text-sm text-slate-400 hover:text-white transition-colors';
+        }
+
+        function ouvrirGestionnaire() {
+            donneesModifiees = false;
+            afficherTableauDonnees();
+            afficherTableauPieux();
+            document.getElementById('modal-gestionnaire').classList.remove('hidden');
+        }
+
+        function fermerGestionnaire() {
+            document.getElementById('modal-gestionnaire').classList.add('hidden');
+            if (donneesModifiees) { rafraichirApplication(); }
+        }
+
+        function afficherTableauDonnees() {
+            const tbody = document.getElementById('table-tirants-body');
+            tbody.innerHTML = '';
+            donnees_tirants.forEach((t, i) => {
+                if(!t.groupe) t.groupe = "A";
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-800/50">
+                        <td class="p-1"><select onchange="majTirant(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'groupe')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white text-xs">
+                            <option value="A" ${t.groupe === 'A' ? 'selected' : ''}>${document.getElementById('nom-groupe-a').value}</option>
+                            <option value="B" ${t.groupe === 'B' ? 'selected' : ''}>${document.getElementById('nom-groupe-b').value}</option>
+                        </select></td>
+                        <td class="p-1"><input type="text" value="${t.nom}" onchange="majTirant(${i}, 'nom', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'nom')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${t.x}" onchange="majTirant(${i}, 'x', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'x')" class="w-20 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${t.y}" onchange="majTirant(${i}, 'y', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'y')" class="w-20 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${t.z}" onchange="majTirant(${i}, 'z', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'z')" class="w-20 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${t.L}" onchange="majTirant(${i}, 'L', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'L')" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${t.theta}" onchange="majTirant(${i}, 'theta', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'theta')" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${t.incl}" onchange="majTirant(${i}, 'incl', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'incl')" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1 text-center"><button onclick="supprimerTirant(${i})" class="text-red-400 p-1 font-bold">X</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function majTirant(index, champ, valeur) {
+            if (champ === 'nom' || champ === 'groupe') donnees_tirants[index][champ] = valeur;
+            else donnees_tirants[index][champ] = parseFloat(valeur) || 0;
+            donneesModifiees = true;
+        }
+
+        function supprimerTirant(index) {
+            montrerMessage("Voulez-vous vraiment supprimer ce tirant ?", true, (conf) => {
+                if (conf) { donnees_tirants.splice(index, 1); afficherTableauDonnees(); donneesModifiees = true; }
+            });
+        }
+
+        function ajouterLigneTirant() {
+            donnees_tirants.unshift(creerLigneVide('tirants'));
+            afficherTableauDonnees(); donneesModifiees = true;
+        }
+
+        function purgerTirants() {
+            montrerMessage("Effacer tous les tirants ?", true, (conf) => {
+                if (conf) { donnees_tirants = []; afficherTableauDonnees(); donneesModifiees = true; }
+            });
+        }
+
+        function afficherTableauPieux() {
+            const tbody = document.getElementById('table-pieux-body');
+            tbody.innerHTML = '';
+            donnees_pieux.forEach((p, i) => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-800/50">
+                        <td class="p-1"><input type="text" value="${p.nom}" onchange="majPieu(${i}, 'nom', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'nom')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${p.x}" onchange="majPieu(${i}, 'x', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'x')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${p.y}" onchange="majPieu(${i}, 'y', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'y')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${p.zTete}" onchange="majPieu(${i}, 'zTete', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'zTete')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${p.zBase}" onchange="majPieu(${i}, 'zBase', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'zBase')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1"><input type="number" step="any" value="${p.diametre}" onchange="majPieu(${i}, 'diametre', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'diametre')" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
+                        <td class="p-1 text-center"><button onclick="supprimerPieu(${i})" class="text-red-400 p-1 font-bold">X</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function majPieu(index, champ, valeur) {
+            if (champ === 'nom') donnees_pieux[index][champ] = valeur;
+            else donnees_pieux[index][champ] = parseFloat(valeur) || 0;
+            donneesModifiees = true;
+        }
+
+        function supprimerPieu(index) {
+            montrerMessage("Voulez-vous vraiment supprimer ce pieu ?", true, (conf) => {
+                if (conf) { donnees_pieux.splice(index, 1); afficherTableauPieux(); donneesModifiees = true; }
+            });
+        }
+
+        function ajouterLignePieu() {
+            donnees_pieux.unshift(creerLigneVide('pieux'));
+            afficherTableauPieux(); donneesModifiees = true;
+        }
+
+        function purgerPieux() {
+            montrerMessage("Effacer tous les pieux ?", true, (conf) => {
+                if (conf) { donnees_pieux = []; afficherTableauPieux(); donneesModifiees = true; }
+            });
+        }
+
+        // --- COLLAGE TYPE "TABLEUR" DIRECTEMENT DANS LES CELLULES (Ctrl+V depuis Excel) ---
+        function creerLigneVide(type) {
+            return type === 'tirants'
+                ? { nom: "Nouveau", groupe: "A", x: centreX || 0, y: centreY || 0, z: centreZ || 0, L: 15, theta: 90, incl: 15 }
+                : { nom: "Nouveau Pieu", x: centreX || 0, y: centreY || 0, zTete: 167, zBase: 155, diametre: 1.0 };
+        }
+
+        function affecterValeurCellule(ligne, champ, valeurBrute) {
+            const valeur = valeurBrute.trim();
+            if (champ === 'nom') {
+                ligne.nom = valeur;
+            } else if (champ === 'groupe') {
+                const v = valeur.toLowerCase();
+                const nomA = document.getElementById('nom-groupe-a').value.toLowerCase();
+                const nomB = document.getElementById('nom-groupe-b').value.toLowerCase();
+                if (v === 'b' || v === nomB) ligne.groupe = 'B';
+                else if (v === 'a' || v === nomA) ligne.groupe = 'A';
+                else ligne.groupe = valeur.toUpperCase().includes('B') ? 'B' : 'A';
+            } else {
+                ligne[champ] = parseFloat(valeur.replace(',', '.')) || 0;
+            }
+        }
+
+        function gererCollage(event, type, ligneIndex, champ) {
+            event.preventDefault();
+            const texte = (event.clipboardData || window.clipboardData).getData('text');
+            if (!texte) return;
+
+            const lignesCollees = texte.split(/\r\n|\n|\r/).filter(l => l.length > 0).map(l => l.split('\t'));
+            if (lignesCollees.length === 0) return;
+
+            const cols = type === 'tirants' ? colsTirants : colsPieux;
+            const donnees = type === 'tirants' ? donnees_tirants : donnees_pieux;
+            const colDepart = cols.indexOf(champ);
+
+            lignesCollees.forEach((valeurs, decalageLigne) => {
+                const cible = ligneIndex + decalageLigne;
+                while (donnees.length <= cible) donnees.push(creerLigneVide(type));
+                valeurs.forEach((valeur, decalageCol) => {
+                    const colCible = colDepart + decalageCol;
+                    if (colCible >= cols.length) return;
+                    affecterValeurCellule(donnees[cible], cols[colCible], valeur);
+                });
+            });
+
+            donneesModifiees = true;
+            if (type === 'tirants') afficherTableauDonnees(); else afficherTableauPieux();
+        }
+
+        function rafraichirApplication() {
+            preparerDonnees();
+            Object.values(meshes3D).forEach(mesh => scene.remove(mesh));
+            meshes3D = {};
+            document.getElementById('labels-container').innerHTML = '';
+            labelsList = [];
+            
+            const clashs = calculerClashs();
+            dessinerTirants(clashs);
+            dessinerPieux();
+            sauvegarderLocal();
+        }
+
+        function sauvegarderLocal() {
+            const appState = {
+                tirants: donnees_tirants,
+                pieux: donnees_pieux,
+                config: config,
+                nomGroupeA: document.getElementById('nom-groupe-a').value,
+                nomGroupeB: document.getElementById('nom-groupe-b').value
+            };
+            localStorage.setItem('geoVisual3dData', JSON.stringify(appState));
+            const indicator = document.getElementById('save-indicator');
+            if(indicator) { indicator.style.opacity = '1'; setTimeout(() => indicator.style.opacity = '0', 2000); }
+        }
+
+        function chargerLocal() {
+            // Reprend automatiquement les données de l'ancienne version (GeoClash 3D) si présentes
+            const ancienneSauvegarde = localStorage.getItem('geoClashData');
+            const saved = localStorage.getItem('geoVisual3dData') || ancienneSauvegarde;
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    if(data.tirants) donnees_tirants = data.tirants;
+                    if(data.pieux) donnees_pieux = data.pieux;
+                    if (data.config) {
+                        config.rayonTirant = data.config.rayonTirant || 0.15;
+                        config.alerteDistance = data.config.alerteDistance || 1.0;
+                        config.afficherNoms = data.config.afficherNoms !== false;
+                    }
+                    if (data.nomGroupeA) document.getElementById('nom-groupe-a').value = data.nomGroupeA;
+                    if (data.nomGroupeB) document.getElementById('nom-groupe-b').value = data.nomGroupeB;
+
+                    document.getElementById('alert-threshold').value = config.alerteDistance;
+                    document.getElementById('rayon-tirant').value = config.rayonTirant;
+                    document.getElementById('toggle-noms').checked = config.afficherNoms;
+                    document.getElementById('labels-container').style.display = config.afficherNoms ? 'block' : 'none';
+                } catch (e) {}
+            }
+            if (ancienneSauvegarde) localStorage.removeItem('geoClashData');
+        }
+
+        function reinitialiserDonneesLocales() {
+            montrerMessage("Effacer vos données locales et restaurer l'exemple par défaut ?", true, (conf) => {
+                if(conf) {
+                    localStorage.removeItem('geoVisual3dData');
+                    location.reload();
+                }
+            });
+        }
+
+        window.onload = () => {
+            chargerLocal();
+            preparerDonnees();
+            init3D();
+            const clashsInitiaux = calculerClashs();
+            dessinerTirants(clashsInitiaux);
+            dessinerPieux();
+            animate();
+        };
+
+    </script>
+</body>
+</html>
