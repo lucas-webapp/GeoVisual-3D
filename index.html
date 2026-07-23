@@ -38,6 +38,26 @@
         /* Scrollbar custom */
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+        /* Tableaux façon "tableur" : grille fine entre les cellules, pas de bordure en boîte par champ */
+        .table-tableur { border-collapse: collapse; }
+        .table-tableur td { padding: 0; border-right: 1px solid #1e293b; border-bottom: 1px solid #1e293b; }
+        .table-tableur input, .table-tableur select {
+            display: block;
+            width: 100%;
+            background: transparent;
+            border: none;
+            padding: 5px 6px;
+            color: #f8fafc;
+            font: inherit;
+            outline: none;
+        }
+        .table-tableur input:focus, .table-tableur select:focus {
+            background: #1e293b;
+            box-shadow: inset 0 0 0 2px #3b82f6;
+            position: relative;
+        }
+        .table-tableur tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
     </style>
 </head>
 <body class="text-sm">
@@ -113,15 +133,15 @@
                     <button onclick="purgerTirants()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer Tirants</button>
                 </div>
                 <div class="flex-1 overflow-auto p-2 custom-scrollbar">
-                    <table class="w-full text-left text-sm text-slate-300">
+                    <table class="w-full table-fixed text-left text-sm text-slate-300 table-tableur">
                         <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
                             <tr>
-                                <th class="px-2 py-2">Groupe</th><th class="px-2 py-2">Nom</th><th class="px-2 py-2">X</th>
-                                <th class="px-2 py-2">Y</th><th class="px-2 py-2">Z</th><th class="px-2 py-2">L (m)</th>
-                                <th class="px-2 py-2">Azimut (°)</th><th class="px-2 py-2">Incl. (°)</th><th class="px-2 py-2">Diamètre (m)</th><th class="px-2 py-2 text-center">Actions</th>
+                                <th class="px-2 py-2 w-14">Groupe</th><th class="px-2 py-2 w-36">Nom</th><th class="px-2 py-2 w-28">X</th>
+                                <th class="px-2 py-2 w-28">Y</th><th class="px-2 py-2 w-24">Z</th><th class="px-2 py-2 w-16">L (m)</th>
+                                <th class="px-2 py-2 w-16">Azimut (°)</th><th class="px-2 py-2 w-16">Incl. (°)</th><th class="px-2 py-2 w-20">Diamètre (m)</th><th class="px-2 py-2 w-12 text-center">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="table-tirants-body" class="divide-y divide-slate-700/50"></tbody>
+                        <tbody id="table-tirants-body"></tbody>
                     </table>
                 </div>
             </div>
@@ -138,15 +158,15 @@
                     <button onclick="purgerPieux()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer Pieux</button>
                 </div>
                 <div class="flex-1 overflow-auto p-2 custom-scrollbar">
-                    <table class="w-full text-left text-sm text-slate-300">
+                    <table class="w-full table-fixed text-left text-sm text-slate-300 table-tableur">
                         <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
                             <tr>
-                                <th class="px-2 py-2">Groupe</th><th class="px-2 py-2">Nom</th><th class="px-2 py-2">X</th><th class="px-2 py-2">Y</th>
-                                <th class="px-2 py-2">Z Tête</th><th class="px-2 py-2">Z Base</th><th class="px-2 py-2">Diamètre (m)</th>
-                                <th class="px-2 py-2 text-center">Actions</th>
+                                <th class="px-2 py-2 w-14">Groupe</th><th class="px-2 py-2 w-40">Nom</th><th class="px-2 py-2 w-28">X</th><th class="px-2 py-2 w-28">Y</th>
+                                <th class="px-2 py-2 w-24">Z Tête</th><th class="px-2 py-2 w-24">Z Base</th><th class="px-2 py-2 w-20">Diamètre (m)</th>
+                                <th class="px-2 py-2 w-12 text-center">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="table-pieux-body" class="divide-y divide-slate-700/50"></tbody>
+                        <tbody id="table-pieux-body"></tbody>
                     </table>
                 </div>
             </div>
@@ -163,16 +183,16 @@
                     <button onclick="purgerSurfaces()" class="text-red-400 hover:text-red-300 text-xs underline font-semibold">Effacer Surfaces</button>
                 </div>
                 <div class="flex-1 overflow-auto p-2 custom-scrollbar">
-                    <table class="w-full text-left text-sm text-slate-300">
+                    <table class="w-full table-fixed text-left text-sm text-slate-300 table-tableur">
                         <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
                             <tr>
-                                <th class="px-2 py-2">Groupe</th><th class="px-2 py-2">Nom</th><th class="px-2 py-2 text-center">Points</th>
-                                <th class="px-2 py-2 text-center">Visible</th><th class="px-2 py-2 text-center">Couleur</th>
-                                <th class="px-2 py-2">Opacité</th><th class="px-2 py-2">Épaisseur (m)</th>
-                                <th class="px-2 py-2 text-center">Actions</th>
+                                <th class="px-2 py-2 w-14">Groupe</th><th class="px-2 py-2 w-48">Nom</th><th class="px-2 py-2 w-24 text-center">Points</th>
+                                <th class="px-2 py-2 w-16 text-center">Visible</th><th class="px-2 py-2 w-16 text-center">Couleur</th>
+                                <th class="px-2 py-2 w-20">Opacité</th><th class="px-2 py-2 w-24">Épaisseur (m)</th>
+                                <th class="px-2 py-2 w-12 text-center">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="table-surfaces-body" class="divide-y divide-slate-700/50"></tbody>
+                        <tbody id="table-surfaces-body"></tbody>
                     </table>
                 </div>
             </div>
@@ -195,11 +215,11 @@
                 <button onclick="ajouterPointSurface()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs shadow transition-colors font-semibold">+ Nouveau Point</button>
             </div>
             <div class="flex-1 overflow-auto custom-scrollbar">
-                <table class="w-full text-left text-sm text-slate-300">
+                <table class="w-full table-fixed text-left text-sm text-slate-300 table-tableur">
                     <thead class="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0 z-10 shadow">
-                        <tr><th class="px-2 py-2">X</th><th class="px-2 py-2">Y</th><th class="px-2 py-2">Z</th><th class="px-2 py-2 text-center">Actions</th></tr>
+                        <tr><th class="px-2 py-2">X</th><th class="px-2 py-2">Y</th><th class="px-2 py-2">Z</th><th class="px-2 py-2 w-14 text-center">Actions</th></tr>
                     </thead>
-                    <tbody id="table-points-surface-body" class="divide-y divide-slate-700/50"></tbody>
+                    <tbody id="table-points-surface-body"></tbody>
                 </table>
             </div>
             <div class="flex justify-end mt-4">
@@ -262,7 +282,7 @@
         const colsPieux = ['groupe', 'nom', 'x', 'y', 'zTete', 'zBase', 'diametre'];
         const colsSurfaces = ['groupe', 'nom', 'opacite', 'epaisseur'];
 
-        const classeBordureGroupe = (groupe) => groupe === 'A' ? 'border-blue-500' : 'border-teal-500';
+        const classeBordureGroupe = (groupe) => groupe === 'A' ? 'border-l-4 border-blue-500' : 'border-l-4 border-teal-500';
 
         // Navigation clavier type "tableur Excel" : flèches, Tab et Entrée passent à la cellule voisine
         // (en sautant les colonnes sans champ éditable, comme la colonne Actions)
@@ -707,17 +727,17 @@
                 const bordureGroupe = classeBordureGroupe(t.groupe);
                 const nomGroupe = t.groupe === 'A' ? document.getElementById('nom-groupe-a').value : document.getElementById('nom-groupe-b').value;
                 tbody.innerHTML += `
-                    <tr class="hover:bg-slate-800/50">
-                        <td class="p-1"><input type="text" value="${t.groupe}" title="${nomGroupe}" onchange="majTirant(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-12 text-center uppercase bg-slate-900 border-2 ${bordureGroupe} rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" value="${t.nom}" onchange="majTirant(${i}, 'nom', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'nom')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${t.x}" onchange="majTirant(${i}, 'x', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-20 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${t.y}" onchange="majTirant(${i}, 'y', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-20 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${t.z}" onchange="majTirant(${i}, 'z', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'z')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-20 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${t.L}" onchange="majTirant(${i}, 'L', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'L')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${t.theta}" onchange="majTirant(${i}, 'theta', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'theta')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${t.incl}" onchange="majTirant(${i}, 'incl', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'incl')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${t.diametre}" onchange="majTirant(${i}, 'diametre', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'diametre')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1 text-center"><button onclick="supprimerTirant(${i})" class="text-red-400 p-1 font-bold">X</button></td>
+                    <tr>
+                        <td><input type="text" value="${t.groupe}" title="${nomGroupe}" onchange="majTirant(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-center uppercase ${bordureGroupe}"></td>
+                        <td><input type="text" value="${t.nom}" onchange="majTirant(${i}, 'nom', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'nom')" onkeydown="naviguerCellule(event)" onfocus="this.select()"></td>
+                        <td><input type="text" inputmode="decimal" value="${t.x}" onchange="majTirant(${i}, 'x', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${t.y}" onchange="majTirant(${i}, 'y', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${t.z}" onchange="majTirant(${i}, 'z', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'z')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${t.L}" onchange="majTirant(${i}, 'L', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'L')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${t.theta}" onchange="majTirant(${i}, 'theta', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'theta')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${t.incl}" onchange="majTirant(${i}, 'incl', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'incl')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${t.diametre}" onchange="majTirant(${i}, 'diametre', this.value)" onpaste="gererCollage(event, 'tirants', ${i}, 'diametre')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td class="text-center py-1"><button onclick="supprimerTirant(${i})" class="text-red-400 hover:text-red-300 font-bold">X</button></td>
                     </tr>
                 `;
             });
@@ -754,15 +774,15 @@
                 const bordureGroupe = classeBordureGroupe(p.groupe);
                 const nomGroupe = p.groupe === 'A' ? document.getElementById('nom-groupe-a').value : document.getElementById('nom-groupe-b').value;
                 tbody.innerHTML += `
-                    <tr class="hover:bg-slate-800/50">
-                        <td class="p-1"><input type="text" value="${p.groupe}" title="${nomGroupe}" onchange="majPieu(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-12 text-center uppercase bg-slate-900 border-2 ${bordureGroupe} rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" value="${p.nom}" onchange="majPieu(${i}, 'nom', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'nom')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${p.x}" onchange="majPieu(${i}, 'x', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${p.y}" onchange="majPieu(${i}, 'y', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${p.zTete}" onchange="majPieu(${i}, 'zTete', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'zTete')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${p.zBase}" onchange="majPieu(${i}, 'zBase', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'zBase')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${p.diametre}" onchange="majPieu(${i}, 'diametre', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'diametre')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1 text-center"><button onclick="supprimerPieu(${i})" class="text-red-400 p-1 font-bold">X</button></td>
+                    <tr>
+                        <td><input type="text" value="${p.groupe}" title="${nomGroupe}" onchange="majPieu(${i}, 'groupe', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-center uppercase ${bordureGroupe}"></td>
+                        <td><input type="text" value="${p.nom}" onchange="majPieu(${i}, 'nom', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'nom')" onkeydown="naviguerCellule(event)" onfocus="this.select()"></td>
+                        <td><input type="text" inputmode="decimal" value="${p.x}" onchange="majPieu(${i}, 'x', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${p.y}" onchange="majPieu(${i}, 'y', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${p.zTete}" onchange="majPieu(${i}, 'zTete', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'zTete')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${p.zBase}" onchange="majPieu(${i}, 'zBase', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'zBase')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${p.diametre}" onchange="majPieu(${i}, 'diametre', this.value)" onpaste="gererCollage(event, 'pieux', ${i}, 'diametre')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td class="text-center py-1"><button onclick="supprimerPieu(${i})" class="text-red-400 hover:text-red-300 font-bold">X</button></td>
                     </tr>
                 `;
             });
@@ -802,15 +822,15 @@
                 const bordureGroupe = classeBordureGroupe(s.groupe);
                 const nomGroupe = s.groupe === 'A' ? document.getElementById('nom-groupe-a').value : document.getElementById('nom-groupe-b').value;
                 tbody.innerHTML += `
-                    <tr class="hover:bg-slate-800/50">
-                        <td class="p-1"><input type="text" value="${s.groupe}" title="${nomGroupe}" onchange="majSurface(${i}, 'groupe', this.value)" onpaste="gererCollageSurface(event, ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-12 text-center uppercase bg-slate-900 border-2 ${bordureGroupe} rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" value="${s.nom}" onchange="majSurface(${i}, 'nom', this.value)" onpaste="gererCollageSurface(event, ${i}, 'nom')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1 text-center"><button onclick="ouvrirEditeurPoints(${i})" class="text-cyan-400 hover:text-cyan-300 underline text-xs">${s.points.length} point(s)</button></td>
-                        <td class="p-1 text-center"><input type="checkbox" ${s.visible ? 'checked' : ''} onchange="majSurfaceVisibilite(${i}, this.checked)" class="w-4 h-4 accent-blue-500 cursor-pointer"></td>
-                        <td class="p-1 text-center"><input type="color" value="${hexNombreVersCss(s.couleur)}" onchange="majSurface(${i}, 'couleur', this.value)" class="w-10 h-7 bg-slate-900 border border-slate-700 rounded cursor-pointer"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${s.opacite}" onchange="majSurface(${i}, 'opacite', this.value)" onpaste="gererCollageSurface(event, ${i}, 'opacite')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${s.epaisseur}" onchange="majSurface(${i}, 'epaisseur', this.value)" onpaste="gererCollageSurface(event, ${i}, 'epaisseur')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1 text-center"><button onclick="supprimerSurface(${i})" class="text-red-400 p-1 font-bold">X</button></td>
+                    <tr>
+                        <td><input type="text" value="${s.groupe}" title="${nomGroupe}" onchange="majSurface(${i}, 'groupe', this.value)" onpaste="gererCollageSurface(event, ${i}, 'groupe')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-center uppercase ${bordureGroupe}"></td>
+                        <td><input type="text" value="${s.nom}" onchange="majSurface(${i}, 'nom', this.value)" onpaste="gererCollageSurface(event, ${i}, 'nom')" onkeydown="naviguerCellule(event)" onfocus="this.select()"></td>
+                        <td class="text-center py-1"><button onclick="ouvrirEditeurPoints(${i})" class="text-cyan-400 hover:text-cyan-300 underline text-xs">${s.points.length} point(s)</button></td>
+                        <td class="text-center py-1"><input type="checkbox" ${s.visible ? 'checked' : ''} onchange="majSurfaceVisibilite(${i}, this.checked)" class="w-4 h-4 accent-blue-500 cursor-pointer"></td>
+                        <td class="text-center py-1"><input type="color" value="${hexNombreVersCss(s.couleur)}" onchange="majSurface(${i}, 'couleur', this.value)" class="w-10 h-6 bg-slate-900 border border-slate-700 rounded cursor-pointer"></td>
+                        <td><input type="text" inputmode="decimal" value="${s.opacite}" onchange="majSurface(${i}, 'opacite', this.value)" onpaste="gererCollageSurface(event, ${i}, 'opacite')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${s.epaisseur}" onchange="majSurface(${i}, 'epaisseur', this.value)" onpaste="gererCollageSurface(event, ${i}, 'epaisseur')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td class="text-center py-1"><button onclick="supprimerSurface(${i})" class="text-red-400 hover:text-red-300 font-bold">X</button></td>
                     </tr>
                 `;
             });
@@ -887,11 +907,11 @@
             tbody.innerHTML = '';
             donnees_surfaces[indexSurfaceEnEdition].points.forEach((pt, i) => {
                 tbody.innerHTML += `
-                    <tr class="hover:bg-slate-800/50">
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${pt.x}" onchange="majPointSurface(${i}, 'x', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${pt.y}" onchange="majPointSurface(${i}, 'y', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1"><input type="text" inputmode="decimal" value="${pt.z}" onchange="majPointSurface(${i}, 'z', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'z')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white"></td>
-                        <td class="p-1 text-center"><button onclick="supprimerPointSurface(${i})" class="text-red-400 p-1 font-bold">X</button></td>
+                    <tr>
+                        <td><input type="text" inputmode="decimal" value="${pt.x}" onchange="majPointSurface(${i}, 'x', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'x')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${pt.y}" onchange="majPointSurface(${i}, 'y', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'y')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td><input type="text" inputmode="decimal" value="${pt.z}" onchange="majPointSurface(${i}, 'z', this.value)" onpaste="gererCollagePointSurface(event, ${i}, 'z')" onkeydown="naviguerCellule(event)" onfocus="this.select()" class="text-right"></td>
+                        <td class="text-center py-1"><button onclick="supprimerPointSurface(${i})" class="text-red-400 hover:text-red-300 font-bold">X</button></td>
                     </tr>
                 `;
             });
